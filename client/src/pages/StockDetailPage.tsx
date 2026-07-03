@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import type { IChartApi } from 'lightweight-charts';
 import { api, type Candle, type Portfolio, type Projection, type Quote } from '../api';
 import { Chart } from '../components/Chart';
+import { RsiChart } from '../components/RsiChart';
 import { OrderPanel } from '../components/OrderPanel';
 import { formatCurrency, formatPercent, changeClass } from '../format';
 import { SMA_COLORS } from '../sma';
@@ -23,6 +25,8 @@ export function StockDetailPage() {
   const [projection, setProjection] = useState<Projection | null>(null);
   const [showProjection, setShowProjection] = useState(true);
   const [smaPeriods, setSmaPeriods] = useState<number[]>([20]);
+  const [showRsi, setShowRsi] = useState(false);
+  const [mainChartApi, setMainChartApi] = useState<IChartApi | null>(null);
   const [rangeIndex, setRangeIndex] = useState(3);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [inWatchlist, setInWatchlist] = useState(false);
@@ -144,6 +148,10 @@ export function StockDetailPage() {
                   />
                   Trend projection
                 </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
+                  <input type="checkbox" checked={showRsi} onChange={(e) => setShowRsi(e.target.checked)} />
+                  RSI (14)
+                </label>
               </div>
             </div>
             {(smaPeriods.length > 0 || (showProjection && projection)) && (
@@ -168,8 +176,26 @@ export function StockDetailPage() {
                 )}
               </div>
             )}
-            <Chart candles={candles} projection={projection} showProjection={showProjection} smaPeriods={smaPeriods} />
+            <Chart
+              candles={candles}
+              projection={projection}
+              showProjection={showProjection}
+              smaPeriods={smaPeriods}
+              onChartApi={setMainChartApi}
+            />
           </div>
+
+          {showRsi && (
+            <div className="card" style={{ marginBottom: 20 }}>
+              <div className="legend">
+                <span>
+                  <span className="legend-swatch" style={{ background: '#e0a52c' }} />
+                  RSI (14)
+                </span>
+              </div>
+              <RsiChart candles={candles} mainChart={mainChartApi} />
+            </div>
+          )}
 
           {quote && (
             <div className="card">

@@ -15,9 +15,10 @@ interface ChartProps {
   projection?: Projection | null;
   showProjection: boolean;
   smaPeriods: number[];
+  onChartApi?: (chart: IChartApi) => void;
 }
 
-export function Chart({ candles, projection, showProjection, smaPeriods }: ChartProps) {
+export function Chart({ candles, projection, showProjection, smaPeriods, onChartApi }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -70,6 +71,7 @@ export function Chart({ candles, projection, showProjection, smaPeriods }: Chart
     candleSeriesRef.current = candleSeries;
     trendSeriesRef.current = trendSeries;
     forecastSeriesRef.current = forecastSeries;
+    onChartApi?.(chart);
 
     const handleResize = () => {
       if (containerRef.current) chart.applyOptions({ width: containerRef.current.clientWidth });

@@ -30,6 +30,9 @@ working either way.
 
 - **Simple Moving Average (SMA)** — toggle a 20- or 50-period SMA line on any
   chart (computed client-side from the loaded candles).
+- **RSI (14)** — Wilder-smoothed Relative Strength Index in its own pane below
+  the price chart, with overbought (70) / oversold (30) reference lines. Its
+  time scale stays synced with the main chart when you zoom or pan.
 - **Trend projection** — a least-squares trendline fitted over the recent
   lookback window (solid blue), extended forward as a dashed forecast line
   (orange). This is classic technical-analysis-style extrapolation — "if the
