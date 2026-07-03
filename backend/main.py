@@ -10,7 +10,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from screener import data_source, get_sp500_tickers, get_stock_history, run_screen, run_screen_progress
+from screener import (
+    data_source,
+    get_intraday_history,
+    get_sp500_tickers,
+    get_stock_history,
+    run_screen,
+    run_screen_progress,
+)
 from tickers import FALLBACK_TICKERS
 from voice import VoiceContext, handle_voice_query, is_configured
 
@@ -75,6 +82,15 @@ def screen_stream(
 @app.get("/api/stock/{ticker}")
 def stock(ticker: str):
     return get_stock_history(ticker.upper())
+
+
+@app.get("/api/stock/{ticker}/intraday")
+def stock_intraday(
+    ticker: str,
+    minutes: int = Query(45, ge=1, le=390, description="Bar size in minutes"),
+    days: int = Query(5, ge=1, le=20, description="How many trading days back"),
+):
+    return get_intraday_history(ticker.upper(), minutes=minutes, days=days)
 
 
 class VoiceFilters(BaseModel):

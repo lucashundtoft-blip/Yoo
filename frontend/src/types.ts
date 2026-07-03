@@ -35,6 +35,18 @@ export interface StockHistoryResponse {
   candles: Candle[];
 }
 
+export interface IntradayCandle {
+  time: string;
+  close: number | null;
+  volume: number | null;
+}
+
+export interface IntradayHistoryResponse {
+  ticker: string;
+  interval_minutes: number;
+  candles: IntradayCandle[];
+}
+
 export type VoiceAction =
   | { type: 'set_universe'; universe: 'sp500' | 'watchlist' }
   | { type: 'set_watchlist'; tickers: string }

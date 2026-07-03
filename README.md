@@ -87,6 +87,7 @@ on port 8000 (see `frontend/vite.config.ts`).
 - `GET /api/screen?universe=sp500|watchlist&watchlist=AAPL,MSFT` — run the screener, returns all results (client filters "only active")
 - `GET /api/screen/stream?universe=sp500|watchlist&watchlist=AAPL,MSFT` — same screen as Server-Sent Events, emitting `{"type":"progress","processed":N,"total":M}` as each batch of tickers finishes and a final `{"type":"done","results":[...]}`. The UI uses this for the live progress bar.
 - `GET /api/stock/{ticker}` — daily closes + MA20/200/400 for charting
+- `GET /api/stock/{ticker}/intraday?minutes=45&days=5` — recent intraday bars (close + volume) for finer entry timing; see Intraday chart below
 - `GET /api/voice/status` — `{"configured": bool}`, whether `ANTHROPIC_API_KEY` is set
 - `POST /api/voice/query` — `{query, filters, results}` → `{reply, actions}` (see Voice control below)
 
@@ -107,6 +108,20 @@ being applied.
 
 Requires an `ANTHROPIC_API_KEY` in `backend/.env` (see above). Without one,
 the app works fully — voice is the only thing disabled.
+
+## Intraday chart
+
+Each ticker's chart has a Daily / Intraday toggle. Daily is the MA20/200/400
+view used for the bounce logic itself; Intraday shows close price + volume
+at a finer bar size (45-min by default, last 5 trading days) — useful for
+timing the actual entry on a day a bounce setup triggers.
+
+With Alpaca configured, intraday bars use the exact requested timeframe
+(any minute value, via `TimeFrame(minutes, TimeFrameUnit.Minute)`). Without
+Alpaca, it falls back to `yfinance`, which only supports a fixed set of
+intervals (1/2/5/15/30/60/90 min) — the backend snaps to the closest one
+and the UI shows a note when the displayed interval doesn't match what you
+asked for.
 
 ## Data source
 

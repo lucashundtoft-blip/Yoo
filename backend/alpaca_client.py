@@ -20,7 +20,7 @@ from alpaca.data.enums import Adjustment, DataFeed
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.models import Bar
 from alpaca.data.requests import StockBarsRequest
-from alpaca.data.timeframe import TimeFrame
+from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 
 BATCH_SIZE = 50  # symbols per request, keeps individual requests a sane size
 
@@ -100,3 +100,34 @@ def fetch_history(
         batch = tickers[i : i + BATCH_SIZE]
         result.update(_fetch_batch(active_client, batch, start, end))
     return result
+
+
+def fetch_intraday_bars(
+    ticker: str, minutes: int = 45, days: int = 5, client: Optional[StockHistoricalDataClient] = None
+) -> pd.DataFrame:
+    """Recent intraday bars for a single ticker at a custom minute timeframe
+    (e.g. 45-min bars over the last 5 sessions), for finer entry timing on
+    a bounce day — separate from the daily history used for MA/bounce
+    detection, and not batched/cached since it's fetched on demand per ticker.
+    """
+    end = date.today() + timedelta(days=1)
+    start = end - timedelta(days=days * 3)  # pad for weekends/holidays
+    active_client = client or _client()
+
+    request = StockBarsRequest(
+        symbol_or_symbols=[_to_alpaca_symbol(ticker)],
+        timeframe=TimeFrame(minutes, TimeFrameUnit.Minute),
+        start=start,
+        end=end,
+        adjustment=Adjustment.SPLIT,
+        feed=DataFeed.IEX,
+    )
+    barset = active_client.get_stock_bars(request)
+    bars = next(iter(barset.data.values()), [])
+    if not bars:
+        return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
+
+    frame = _bars_to_frame(bars)
+    trading_session_minutes = 390  # ~6.5hr US market session
+    bars_per_day = trading_session_minutes // minutes + 1
+    return frame.tail(days * bars_per_day)

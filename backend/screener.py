@@ -281,3 +281,43 @@ def get_stock_history(ticker: str, display_days: int = 500) -> dict:
             "ma400": None if pd.isna(row.get("MA400")) else float(row["MA400"]),
         })
     return {"ticker": ticker, "candles": candles}
+
+
+_YF_INTRADAY_INTERVALS = (1, 2, 5, 15, 30, 60, 90)  # yfinance's supported intraday intervals, in minutes
+
+
+def _nearest_yf_interval(minutes: int) -> int:
+    return min(_YF_INTRADAY_INTERVALS, key=lambda m: abs(m - minutes))
+
+
+def get_intraday_history(ticker: str, minutes: int = 45, days: int = 5) -> dict:
+    """Recent intraday bars for a single ticker — a finer-grained view than
+    the daily MA chart, for timing entries on a bounce day. Alpaca supports
+    the exact requested timeframe (e.g. 45-min bars); yfinance only offers
+    a fixed set of intervals, so the fallback path snaps to the closest one
+    and reports back which it actually used via `interval_minutes`.
+    """
+    if alpaca_client.is_configured():
+        actual_minutes = minutes
+        try:
+            df = alpaca_client.fetch_intraday_bars(ticker, minutes=minutes, days=days)
+        except Exception as e:
+            print(f"Alpaca intraday fetch failed for {ticker}: {e}")
+            df = pd.DataFrame()
+    else:
+        actual_minutes = _nearest_yf_interval(minutes)
+        try:
+            df = yf.Ticker(ticker).history(period=f"{days}d", interval=f"{actual_minutes}m")
+        except Exception as e:
+            print(f"yfinance intraday fetch failed for {ticker}: {e}")
+            df = pd.DataFrame()
+
+    candles = []
+    if df is not None and not df.empty:
+        for idx, row in df.iterrows():
+            candles.append({
+                "time": idx.strftime("%Y-%m-%d %H:%M"),
+                "close": None if pd.isna(row.get("Close")) else float(row["Close"]),
+                "volume": None if pd.isna(row.get("Volume")) else float(row["Volume"]),
+            })
+    return {"ticker": ticker, "interval_minutes": actual_minutes, "candles": candles}

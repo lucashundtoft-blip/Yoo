@@ -1,4 +1,10 @@
-import type { ScreenResult, StockHistoryResponse, VoiceFilters, VoiceQueryResponse } from './types';
+import type {
+  IntradayHistoryResponse,
+  ScreenResult,
+  StockHistoryResponse,
+  VoiceFilters,
+  VoiceQueryResponse,
+} from './types';
 
 const BASE = '/api';
 
@@ -57,6 +63,19 @@ export async function fetchStockHistory(ticker: string): Promise<StockHistoryRes
   const res = await fetch(`${BASE}/stock/${encodeURIComponent(ticker)}`);
   if (!res.ok) {
     throw new Error(`Failed to load history for ${ticker} (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function fetchIntradayHistory(
+  ticker: string,
+  minutes = 45,
+  days = 5
+): Promise<IntradayHistoryResponse> {
+  const params = new URLSearchParams({ minutes: String(minutes), days: String(days) });
+  const res = await fetch(`${BASE}/stock/${encodeURIComponent(ticker)}/intraday?${params.toString()}`);
+  if (!res.ok) {
+    throw new Error(`Failed to load intraday history for ${ticker} (${res.status})`);
   }
   return res.json();
 }
