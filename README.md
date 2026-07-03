@@ -10,6 +10,9 @@ with a hardcoded large-cap fallback if that fetch fails.
 
 ## How a "bounce" is defined
 
+All three are plain **simple moving averages (SMA)** — an unweighted
+rolling mean of daily closes — not EMA or any other weighted variant.
+
 For each moving average (20/200/400 day):
 
 - **touched_recently** — the low over the last 5 sessions came within 2% of the MA
@@ -68,14 +71,29 @@ on port 8000 (see `frontend/vite.config.ts`).
 
 - `GET /api/health` — liveness check
 - `GET /api/tickers?universe=sp500|fallback` — ticker universe used
-- `GET /api/screen?universe=sp500|watchlist&watchlist=AAPL,MSFT&only_active=true` — run the screener
+- `GET /api/screen?universe=sp500|watchlist&watchlist=AAPL,MSFT` — run the screener, returns all results (client filters "only active")
+- `GET /api/screen/stream?universe=sp500|watchlist&watchlist=AAPL,MSFT` — same screen as Server-Sent Events, emitting `{"type":"progress","processed":N,"total":M}` as each batch of tickers finishes and a final `{"type":"done","results":[...]}`. The UI uses this for the live progress bar.
 - `GET /api/stock/{ticker}` — daily closes + MA20/200/400 for charting
+
+## Caching & progress
+
+- Downloaded OHLCV history is cached in-process per ticker for 15 minutes
+  (`HISTORY_CACHE_TTL` in `backend/screener.py`). Re-running a scan, switching
+  filters, or opening a stock's chart within that window reuses the cached
+  data instead of re-hitting Yahoo Finance — repeat scans typically drop from
+  tens of seconds to well under a second.
+- The cache is in-memory and per-process, so it resets when the backend
+  restarts, and only helps within a single running instance.
+- The full-universe scan is processed in batches of `SCREEN_BATCH_SIZE` (25)
+  tickers, streaming a progress event after each batch so the UI can show
+  "N / total tickers" and a progress bar instead of one long opaque wait.
 
 ## Notes / next steps
 
-- First S&P 500 scan takes ~30-60s (500 tickers × 3y daily history via `yfinance`).
+- First S&P 500 scan takes ~30-60s (500 tickers × 3y daily history via `yfinance`);
+  repeat scans within 15 minutes are much faster thanks to the history cache.
 - Yahoo's free data is typically delayed, not real-time — fine for end-of-day
   screening, not for intraday execution.
-- Natural extensions: persist scan results, add volume/RSI confirmation,
-  email/Slack alerts when a new confirmed bounce appears, backtest the setup
-  against historical forward returns.
+- Natural extensions: persist scan results to disk/DB (cache survives restarts),
+  add volume/RSI confirmation, email/Slack alerts when a new confirmed bounce
+  appears, backtest the setup against historical forward returns.

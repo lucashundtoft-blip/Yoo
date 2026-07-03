@@ -11,6 +11,7 @@ interface Props {
   onMaFilterChange: (v: string) => void;
   onRun: () => void;
   loading: boolean;
+  progress: { processed: number; total: number } | null;
 }
 
 const selectClass =
@@ -29,6 +30,7 @@ export default function FilterBar({
   onMaFilterChange,
   onRun,
   loading,
+  progress,
 }: Props) {
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-slate-800 bg-slate-900/60 p-4">
@@ -97,10 +99,24 @@ export default function FilterBar({
           {loading ? 'Scanning…' : 'Run screen'}
         </button>
       </div>
-      <p className="text-xs text-slate-500">
-        Scanning the full S&amp;P 500 pulls ~500 tickers of 3-year daily history and can take a
-        minute on the first run.
-      </p>
+      {progress && progress.total > 0 ? (
+        <div className="flex items-center gap-3">
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800">
+            <div
+              className="h-full rounded-full bg-emerald-500 transition-all duration-200"
+              style={{ width: `${Math.round((progress.processed / progress.total) * 100)}%` }}
+            />
+          </div>
+          <span className="whitespace-nowrap text-xs tabular-nums text-slate-400">
+            {progress.processed} / {progress.total} tickers
+          </span>
+        </div>
+      ) : (
+        <p className="text-xs text-slate-500">
+          Scanning the full S&amp;P 500 pulls ~500 tickers of 3-year daily history — the first run
+          can take a minute, cached tickers make repeat runs within 15 minutes much faster.
+        </p>
+      )}
     </div>
   );
 }

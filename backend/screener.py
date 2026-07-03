@@ -4,12 +4,16 @@ Top-down logic: MA200 vs MA400 (plus price) sets the longer-term trend
 bias first; then each moving average is checked individually for a
 "bounce" setup — price pulled back into the average and is holding /
 reclaiming it while the average itself is still rising.
+
+All three MAs (20/200/400) are plain simple moving averages (SMA) —
+an unweighted rolling mean of daily closes (`Series.rolling(p).mean()`),
+not an EMA or any other weighted variant.
 """
 from __future__ import annotations
 
 import time
 from dataclasses import asdict, dataclass
-from typing import Optional
+from typing import Iterator, Optional
 
 import pandas as pd
 import yfinance as yf
@@ -21,10 +25,17 @@ BOUNCE_LOOKBACK_DAYS = 5      # window checked for a recent touch of the MA
 BOUNCE_TOUCH_PCT = 0.02       # low must come within 2% of the MA to count as a "touch"
 BOUNCE_SLOPE_LOOKBACK = 10    # days used to judge whether the MA itself is rising
 HISTORY_PERIOD = "3y"         # needs to comfortably cover MA400 + lookback
+SCREEN_BATCH_SIZE = 25        # tickers per yfinance batch download / progress tick
 
 _sp500_cache: Optional[list[str]] = None
 _sp500_cache_ts: float = 0.0
 SP500_CACHE_TTL = 6 * 3600
+
+# Per-ticker OHLCV history cache. Yahoo's free data is end-of-day-ish
+# anyway (delayed intraday), so a short TTL avoids re-downloading the same
+# ~750 rows/ticker on every scan without going noticeably stale.
+_history_cache: dict[str, tuple[float, pd.DataFrame]] = {}
+HISTORY_CACHE_TTL = 15 * 60
 
 
 def get_sp500_tickers() -> list[str]:
@@ -148,47 +159,92 @@ def _compute_result(ticker: str, hist: pd.DataFrame) -> Optional[ScreenResult]:
     )
 
 
-def run_screen(tickers: list[str], only_active: bool = True) -> list[dict]:
-    if not tickers:
-        return []
-
-    data = yf.download(
-        tickers=tickers,
-        period=HISTORY_PERIOD,
-        interval="1d",
-        group_by="ticker",
-        threads=True,
-        progress=False,
-        auto_adjust=False,
-    )
-
-    results = []
-    single = len(tickers) == 1
+def _fetch_history_batch(tickers: list[str]) -> dict[str, pd.DataFrame]:
+    """Download OHLCV history for a batch of tickers, reusing cached data
+    that's still within HISTORY_CACHE_TTL instead of re-fetching it.
+    """
+    now = time.time()
+    result: dict[str, pd.DataFrame] = {}
+    to_fetch = []
     for t in tickers:
-        try:
-            hist = data if single else data[t]
-        except (KeyError, TypeError):
-            continue
-        res = _compute_result(t, hist)
-        if res is None:
-            continue
-        if only_active and not res.best_setup:
-            continue
-        results.append(asdict(res))
+        cached = _history_cache.get(t)
+        if cached and now - cached[0] < HISTORY_CACHE_TTL:
+            result[t] = cached[1]
+        else:
+            to_fetch.append(t)
+
+    if to_fetch:
+        data = yf.download(
+            tickers=to_fetch,
+            period=HISTORY_PERIOD,
+            interval="1d",
+            group_by="ticker",
+            threads=True,
+            progress=False,
+            auto_adjust=False,
+        )
+        single = len(to_fetch) == 1
+        for t in to_fetch:
+            try:
+                hist = data if single else data[t]
+            except (KeyError, TypeError):
+                continue
+            _history_cache[t] = (now, hist)
+            result[t] = hist
+
+    return result
+
+
+def run_screen_progress(tickers: list[str]) -> Iterator[dict]:
+    """Screen tickers in batches, yielding progress events as it goes and a
+    final `{"type": "done", ...}` event with every computed result (active
+    setup or not — the caller/UI decides what to filter and display).
+    """
+    total = len(tickers)
+    yield {"type": "progress", "processed": 0, "total": total}
+    if total == 0:
+        yield {"type": "done", "count": 0, "results": []}
+        return
+
+    results: list[dict] = []
+    processed = 0
+    for i in range(0, total, SCREEN_BATCH_SIZE):
+        batch = tickers[i : i + SCREEN_BATCH_SIZE]
+        hist_map = _fetch_history_batch(batch)
+        for t in batch:
+            res = _compute_result(t, hist_map.get(t))
+            if res is not None:
+                results.append(asdict(res))
+        processed += len(batch)
+        yield {"type": "progress", "processed": min(processed, total), "total": total}
 
     results.sort(key=lambda r: (r["best_setup"] is None, r["ticker"]))
-    return results
+    yield {"type": "done", "count": len(results), "results": results}
 
 
-def get_stock_history(ticker: str, period: str = "2y") -> dict:
-    hist = yf.Ticker(ticker).history(period=period, interval="1d")
-    if hist.empty:
+def run_screen(tickers: list[str]) -> list[dict]:
+    """Non-streaming convenience wrapper around run_screen_progress."""
+    for event in run_screen_progress(tickers):
+        if event["type"] == "done":
+            return event["results"]
+    return []
+
+
+def get_stock_history(ticker: str, display_days: int = 500) -> dict:
+    """Full HISTORY_PERIOD is fetched (and cached) so MA400 has enough
+    lookback, but only the most recent `display_days` rows are returned
+    for charting.
+    """
+    hist_map = _fetch_history_batch([ticker])
+    full_hist = hist_map.get(ticker)
+    if full_hist is None or full_hist.empty:
         return {"ticker": ticker, "candles": []}
+    full_hist = full_hist.copy()
 
-    full_hist = yf.Ticker(ticker).history(period=HISTORY_PERIOD, interval="1d")
     for p in MA_PERIODS:
         full_hist[f"MA{p}"] = full_hist["Close"].rolling(p).mean()
-    trimmed = full_hist.loc[hist.index.min():]
+
+    trimmed = full_hist.tail(display_days)
 
     candles = []
     for idx, row in trimmed.iterrows():

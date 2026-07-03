@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { fetchScreen } from './api';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { streamScreen } from './api';
 import FilterBar from './components/FilterBar';
 import ResultsTable from './components/ResultsTable';
 import StockChart from './components/StockChart';
@@ -14,32 +14,53 @@ export default function App() {
 
   const [results, setResults] = useState<ScreenResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<{ processed: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   const [lastRunAt, setLastRunAt] = useState<Date | null>(null);
 
-  async function runScreen() {
+  const cancelRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => cancelRef.current?.(), []);
+
+  function runScreen() {
+    if (universe === 'watchlist' && !watchlist.trim()) {
+      setError('Add at least one ticker to your watchlist.');
+      return;
+    }
+
+    cancelRef.current?.();
     setLoading(true);
     setError(null);
-    try {
-      const res = await fetchScreen({ universe, watchlist, onlyActive });
-      setResults(res.results);
-      setLastRunAt(new Date());
-      setSelectedTicker(res.results[0]?.ticker ?? null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Screen failed');
-    } finally {
-      setLoading(false);
-    }
+    setProgress({ processed: 0, total: 0 });
+
+    cancelRef.current = streamScreen(
+      { universe, watchlist },
+      {
+        onProgress: (processed, total) => setProgress({ processed, total }),
+        onDone: (screenResults) => {
+          setResults(screenResults);
+          setLastRunAt(new Date());
+          setSelectedTicker(screenResults[0]?.ticker ?? null);
+          setLoading(false);
+          setProgress(null);
+        },
+        onError: (message) => {
+          setError(message);
+          setLoading(false);
+          setProgress(null);
+        },
+      }
+    );
   }
 
   const filtered = useMemo(() => {
     return results.filter((r) => {
+      if (onlyActive && !r.best_setup) return false;
       if (trendFilter !== 'all' && r.trend_bias !== trendFilter) return false;
       if (maFilter !== 'all' && !r.best_setup?.startsWith(`MA${maFilter}`)) return false;
       return true;
     });
-  }, [results, trendFilter, maFilter]);
+  }, [results, onlyActive, trendFilter, maFilter]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
@@ -47,7 +68,8 @@ export default function App() {
         <header className="mb-6">
           <h1 className="text-2xl font-semibold text-slate-50">Stock Screener</h1>
           <p className="mt-1 text-sm text-slate-400">
-            Top-down MA20 / MA200 / MA400 bounce setups, built on real daily price data.
+            Top-down MA20 / MA200 / MA400 (simple moving average) bounce setups, built on real
+            daily price data.
           </p>
         </header>
 
@@ -64,6 +86,7 @@ export default function App() {
           onMaFilterChange={setMaFilter}
           onRun={runScreen}
           loading={loading}
+          progress={progress}
         />
 
         {error && (

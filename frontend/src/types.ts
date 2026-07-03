@@ -22,11 +22,6 @@ export interface ScreenResult {
   best_setup: string | null;
 }
 
-export interface ScreenResponse {
-  count: number;
-  results: ScreenResult[];
-}
-
 export interface Candle {
   date: string;
   close: number | null;
