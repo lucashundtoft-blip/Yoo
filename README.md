@@ -115,11 +115,13 @@ Finance's public endpoints — free and keyless, but unofficial and can be
 fragile (rate limits, layout changes).
 
 Setting both `APCA_API_KEY_ID` and `APCA_API_SECRET_KEY` in `backend/.env`
-switches it to [Alpaca's Market Data API](https://alpaca.markets/) instead
-— a proper, supported API. Paper trading keys work fine (data access is the
-same as live keys); grab them from
-https://app.alpaca.markets/paper/dashboard/overview → "Generate New Keys".
-Note that's a different URL from the one used to actually fetch data
+switches it to [Alpaca's Market Data API](https://alpaca.markets/) instead,
+via Alpaca's official [`alpaca-py`](https://pypi.org/project/alpaca-py/) SDK
+(`StockHistoricalDataClient` / `StockBarsRequest`) rather than hand-rolled
+HTTP calls — it handles pagination and request formatting for you. Paper
+trading keys work fine (data access is the same as live keys); grab them
+from https://app.alpaca.markets/paper/dashboard/overview → "Generate New
+Keys". Note that's a different URL from the one the SDK actually talks to
 (`data.alpaca.markets`) — the paper-trading dashboard is just where you
 create the keys.
 

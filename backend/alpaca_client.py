@@ -1,24 +1,28 @@
-"""Thin client for Alpaca's Market Data API — an alternative to scraping
-Yahoo Finance via yfinance. Used when APCA_API_KEY_ID / APCA_API_SECRET_KEY
-are set; screener.py falls back to yfinance otherwise.
+"""Client for Alpaca's Market Data API, via the official `alpaca-py` SDK —
+an alternative to scraping Yahoo Finance via yfinance. Used when
+APCA_API_KEY_ID / APCA_API_SECRET_KEY are set; screener.py falls back to
+yfinance otherwise.
 
-Note: this hits data.alpaca.markets (market data), not
+Note: this hits data.alpaca.markets (market data) under the hood, not
 paper-api.alpaca.markets (order/account management) — same API keys work
-for both, they're just different services.
+for both, they're just different services. The SDK handles pagination
+internally, unlike a hand-rolled requests-based client.
 """
 from __future__ import annotations
 
 import os
 import re
 from datetime import date, timedelta
+from typing import Optional
 
 import pandas as pd
-import requests
+from alpaca.data.enums import Adjustment, DataFeed
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.models import Bar
+from alpaca.data.requests import StockBarsRequest
+from alpaca.data.timeframe import TimeFrame
 
-DATA_BASE_URL = "https://data.alpaca.markets/v2/stocks/bars"
-BATCH_SIZE = 50          # symbols per request
-PAGE_LIMIT = 10000       # max bars per page, per Alpaca's API
-REQUEST_TIMEOUT = 30
+BATCH_SIZE = 50  # symbols per request, keeps individual requests a sane size
 
 _CLASS_SHARE_RE = re.compile(r"^([A-Z]+)-([A-Z])$")
 
@@ -27,11 +31,11 @@ def is_configured() -> bool:
     return bool(os.environ.get("APCA_API_KEY_ID")) and bool(os.environ.get("APCA_API_SECRET_KEY"))
 
 
-def _headers() -> dict[str, str]:
-    return {
-        "APCA-API-KEY-ID": os.environ["APCA_API_KEY_ID"],
-        "APCA-API-SECRET-KEY": os.environ["APCA_API_SECRET_KEY"],
-    }
+def _client() -> StockHistoricalDataClient:
+    return StockHistoricalDataClient(
+        api_key=os.environ["APCA_API_KEY_ID"],
+        secret_key=os.environ["APCA_API_SECRET_KEY"],
+    )
 
 
 def _to_alpaca_symbol(ticker: str) -> str:
@@ -42,52 +46,46 @@ def _to_alpaca_symbol(ticker: str) -> str:
     return f"{m.group(1)}.{m.group(2)}" if m else ticker
 
 
-def _bars_to_frame(rows: list[dict]) -> pd.DataFrame:
-    df = pd.DataFrame(rows)
-    df["t"] = pd.to_datetime(df["t"])
-    df = df.set_index("t").rename(
-        columns={"o": "Open", "h": "High", "l": "Low", "c": "Close", "v": "Volume"}
+def _bars_to_frame(bars: list[Bar]) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "Open": [b.open for b in bars],
+            "High": [b.high for b in bars],
+            "Low": [b.low for b in bars],
+            "Close": [b.close for b in bars],
+            "Volume": [b.volume for b in bars],
+        },
+        index=pd.DatetimeIndex([b.timestamp for b in bars], name="t"),
     )
-    return df[["Open", "High", "Low", "Close", "Volume"]]
 
 
-def _fetch_batch(tickers: list[str], start: str, end: str) -> dict[str, pd.DataFrame]:
+def _fetch_batch(
+    client: StockHistoricalDataClient, tickers: list[str], start: date, end: date
+) -> dict[str, pd.DataFrame]:
     symbol_map = {_to_alpaca_symbol(t): t for t in tickers}
-    raw_bars: dict[str, list[dict]] = {}
-
-    params = {
-        "symbols": ",".join(symbol_map.keys()),
-        "timeframe": "1Day",
-        "start": start,
-        "end": end,
-        "limit": PAGE_LIMIT,
-        "adjustment": "split",
-        "feed": "iex",  # included on Alpaca's free tier
-    }
-    page_token = None
-    while True:
-        if page_token:
-            params["page_token"] = page_token
-        resp = requests.get(DATA_BASE_URL, headers=_headers(), params=params, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
-        payload = resp.json()
-        for symbol, rows in (payload.get("bars") or {}).items():
-            raw_bars.setdefault(symbol, []).extend(rows)
-        page_token = payload.get("next_page_token")
-        if not page_token:
-            break
+    request = StockBarsRequest(
+        symbol_or_symbols=list(symbol_map.keys()),
+        timeframe=TimeFrame.Day,
+        start=start,
+        end=end,
+        adjustment=Adjustment.SPLIT,
+        feed=DataFeed.IEX,  # included on Alpaca's free tier
+    )
+    barset = client.get_stock_bars(request)
 
     result: dict[str, pd.DataFrame] = {}
-    for alpaca_symbol, rows in raw_bars.items():
+    for alpaca_symbol, bars in barset.data.items():
         ticker = symbol_map.get(alpaca_symbol, alpaca_symbol)
-        if rows:
-            result[ticker] = _bars_to_frame(rows)
+        if bars:
+            result[ticker] = _bars_to_frame(bars)
     return result
 
 
-def fetch_history(tickers: list[str], years: float = 3) -> dict[str, pd.DataFrame]:
-    """Daily OHLCV bars for each ticker, batched to stay within Alpaca's
-    per-request symbol limits. Returns the same {ticker: DataFrame} shape
+def fetch_history(
+    tickers: list[str], years: float = 3, client: Optional[StockHistoricalDataClient] = None
+) -> dict[str, pd.DataFrame]:
+    """Daily OHLCV bars for each ticker, batched to keep individual requests
+    a reasonable size. Returns the same {ticker: DataFrame} shape
     screener.py already expects from the yfinance path.
     """
     if not tickers:
@@ -95,8 +93,10 @@ def fetch_history(tickers: list[str], years: float = 3) -> dict[str, pd.DataFram
 
     end = date.today()
     start = end - timedelta(days=int(years * 365.25) + 10)
+    active_client = client or _client()
+
     result: dict[str, pd.DataFrame] = {}
     for i in range(0, len(tickers), BATCH_SIZE):
         batch = tickers[i : i + BATCH_SIZE]
-        result.update(_fetch_batch(batch, start.isoformat(), end.isoformat()))
+        result.update(_fetch_batch(active_client, batch, start, end))
     return result
