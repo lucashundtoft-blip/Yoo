@@ -8,19 +8,22 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import type { Candle, Projection } from '../api';
+import { computeSMA, SMA_COLORS } from '../sma';
 
 interface ChartProps {
   candles: Candle[];
   projection?: Projection | null;
   showProjection: boolean;
+  smaPeriods: number[];
 }
 
-export function Chart({ candles, projection, showProjection }: ChartProps) {
+export function Chart({ candles, projection, showProjection, smaPeriods }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const trendSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const forecastSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const smaSeriesRef = useRef<Map<number, ISeriesApi<'Line'>>>(new Map());
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -76,6 +79,7 @@ export function Chart({ candles, projection, showProjection }: ChartProps) {
     return () => {
       window.removeEventListener('resize', handleResize);
       chart.remove();
+      smaSeriesRef.current.clear();
     };
   }, []);
 
@@ -110,6 +114,34 @@ export function Chart({ candles, projection, showProjection }: ChartProps) {
       bridge.map((p) => ({ time: p.time as UTCTimestamp, value: p.value }))
     );
   }, [projection, showProjection]);
+
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const chart = chartRef.current;
+    const map = smaSeriesRef.current;
+
+    for (const [period, series] of map) {
+      if (!smaPeriods.includes(period)) {
+        chart.removeSeries(series);
+        map.delete(period);
+      }
+    }
+
+    for (const period of smaPeriods) {
+      if (!map.has(period)) {
+        const series = chart.addLineSeries({
+          color: SMA_COLORS[period] ?? '#8b939d',
+          lineWidth: 2,
+          lastValueVisible: false,
+          priceLineVisible: false,
+        });
+        map.set(period, series);
+      }
+      map.get(period)!.setData(
+        computeSMA(candles, period).map((p) => ({ time: p.time as UTCTimestamp, value: p.value }))
+      );
+    }
+  }, [candles, smaPeriods]);
 
   return <div ref={containerRef} />;
 }

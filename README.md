@@ -26,13 +26,16 @@ If the key is missing, invalid, rate-limited, or the network is unreachable,
 the app automatically falls back to simulated data per-request so it keeps
 working either way.
 
-## Trend projection
+## Indicators
 
-Charts include an optional overlay: a least-squares trendline fitted over the
-recent lookback window (solid blue), extended forward as a dashed forecast
-line (orange). This is classic technical-analysis-style extrapolation — "if
-the recent trend continues" — not a statistical prediction of price
-reversals. Toggle it off from the checkbox above any chart.
+- **Simple Moving Average (SMA)** — toggle a 20- or 50-period SMA line on any
+  chart (computed client-side from the loaded candles).
+- **Trend projection** — a least-squares trendline fitted over the recent
+  lookback window (solid blue), extended forward as a dashed forecast line
+  (orange). This is classic technical-analysis-style extrapolation — "if the
+  recent trend continues" — not a statistical prediction of price reversals.
+
+All indicators are toggled from checkboxes above the chart.
 
 ## Running locally
 

@@ -4,6 +4,9 @@ import { api, type Candle, type Portfolio, type Projection, type Quote } from '.
 import { Chart } from '../components/Chart';
 import { OrderPanel } from '../components/OrderPanel';
 import { formatCurrency, formatPercent, changeClass } from '../format';
+import { SMA_COLORS } from '../sma';
+
+const AVAILABLE_SMA_PERIODS = [20, 50];
 
 const RANGES: { label: string; days: number; resolution: 'D' | '60' | '5'; approxCandles: number }[] = [
   { label: '1D', days: 1, resolution: '5', approxCandles: 78 },
@@ -19,6 +22,7 @@ export function StockDetailPage() {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [projection, setProjection] = useState<Projection | null>(null);
   const [showProjection, setShowProjection] = useState(true);
+  const [smaPeriods, setSmaPeriods] = useState<number[]>([20]);
   const [rangeIndex, setRangeIndex] = useState(3);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [inWatchlist, setInWatchlist] = useState(false);
@@ -71,6 +75,12 @@ export function StockDetailPage() {
     setInWatchlist(!inWatchlist);
   }
 
+  function toggleSma(period: number) {
+    setSmaPeriods((prev) =>
+      prev.includes(period) ? prev.filter((p) => p !== period) : [...prev, period].sort((a, b) => a - b)
+    );
+  }
+
   const position = portfolio?.positions.find((p) => p.symbol === symbol.toUpperCase());
 
   if (error) {
@@ -112,28 +122,53 @@ export function StockDetailPage() {
                   </button>
                 ))}
               </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
-                <input
-                  type="checkbox"
-                  checked={showProjection}
-                  onChange={(e) => setShowProjection(e.target.checked)}
-                />
-                Trend projection
-              </label>
+              <div style={{ display: 'flex', gap: 14 }}>
+                {AVAILABLE_SMA_PERIODS.map((period) => (
+                  <label
+                    key={period}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={smaPeriods.includes(period)}
+                      onChange={() => toggleSma(period)}
+                    />
+                    SMA {period}
+                  </label>
+                ))}
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
+                  <input
+                    type="checkbox"
+                    checked={showProjection}
+                    onChange={(e) => setShowProjection(e.target.checked)}
+                  />
+                  Trend projection
+                </label>
+              </div>
             </div>
-            {showProjection && projection && (
+            {(smaPeriods.length > 0 || (showProjection && projection)) && (
               <div className="legend">
-                <span>
-                  <span className="legend-swatch" style={{ background: '#2f81f7' }} />
-                  Trendline (fitted)
-                </span>
-                <span>
-                  <span className="legend-swatch" style={{ background: '#e0a52c' }} />
-                  Projected ({projection.direction})
-                </span>
+                {smaPeriods.map((period) => (
+                  <span key={period}>
+                    <span className="legend-swatch" style={{ background: SMA_COLORS[period] ?? '#8b939d' }} />
+                    SMA {period}
+                  </span>
+                ))}
+                {showProjection && projection && (
+                  <>
+                    <span>
+                      <span className="legend-swatch" style={{ background: '#2f81f7' }} />
+                      Trendline (fitted)
+                    </span>
+                    <span>
+                      <span className="legend-swatch" style={{ background: '#e0a52c' }} />
+                      Projected ({projection.direction})
+                    </span>
+                  </>
+                )}
               </div>
             )}
-            <Chart candles={candles} projection={projection} showProjection={showProjection} />
+            <Chart candles={candles} projection={projection} showProjection={showProjection} smaPeriods={smaPeriods} />
           </div>
 
           {quote && (
