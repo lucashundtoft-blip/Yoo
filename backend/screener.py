@@ -18,6 +18,7 @@ from typing import Iterator, Optional
 import pandas as pd
 import yfinance as yf
 
+import alpaca_client
 from tickers import FALLBACK_TICKERS
 
 MA_PERIODS = (20, 200, 400)
@@ -159,9 +160,36 @@ def _compute_result(ticker: str, hist: pd.DataFrame) -> Optional[ScreenResult]:
     )
 
 
+def data_source() -> str:
+    return "alpaca" if alpaca_client.is_configured() else "yfinance"
+
+
+def _fetch_from_yfinance(tickers: list[str]) -> dict[str, pd.DataFrame]:
+    data = yf.download(
+        tickers=tickers,
+        period=HISTORY_PERIOD,
+        interval="1d",
+        group_by="ticker",
+        threads=True,
+        progress=False,
+        auto_adjust=False,
+    )
+    result: dict[str, pd.DataFrame] = {}
+    single = len(tickers) == 1
+    for t in tickers:
+        try:
+            hist = data if single else data[t]
+        except (KeyError, TypeError):
+            continue
+        result[t] = hist
+    return result
+
+
 def _fetch_history_batch(tickers: list[str]) -> dict[str, pd.DataFrame]:
     """Download OHLCV history for a batch of tickers, reusing cached data
-    that's still within HISTORY_CACHE_TTL instead of re-fetching it.
+    that's still within HISTORY_CACHE_TTL instead of re-fetching it. Uses
+    Alpaca's Market Data API when APCA_API_KEY_ID/SECRET are configured,
+    otherwise falls back to yfinance.
     """
     now = time.time()
     result: dict[str, pd.DataFrame] = {}
@@ -174,21 +202,18 @@ def _fetch_history_batch(tickers: list[str]) -> dict[str, pd.DataFrame]:
             to_fetch.append(t)
 
     if to_fetch:
-        data = yf.download(
-            tickers=to_fetch,
-            period=HISTORY_PERIOD,
-            interval="1d",
-            group_by="ticker",
-            threads=True,
-            progress=False,
-            auto_adjust=False,
-        )
-        single = len(to_fetch) == 1
-        for t in to_fetch:
+        if alpaca_client.is_configured():
             try:
-                hist = data if single else data[t]
-            except (KeyError, TypeError):
-                continue
+                fetched = alpaca_client.fetch_history(to_fetch, years=int(HISTORY_PERIOD.rstrip("y")))
+            except Exception as e:
+                # Unlike yfinance (which swallows per-ticker failures internally),
+                # requests raises on auth/network errors — don't let a bad Alpaca
+                # key or a dropped connection take down the whole scan.
+                print(f"Alpaca fetch failed for batch {to_fetch}: {e}")
+                fetched = {}
+        else:
+            fetched = _fetch_from_yfinance(to_fetch)
+        for t, hist in fetched.items():
             _history_cache[t] = (now, hist)
             result[t] = hist
 

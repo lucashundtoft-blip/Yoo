@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from screener import get_sp500_tickers, get_stock_history, run_screen, run_screen_progress
+from screener import data_source, get_sp500_tickers, get_stock_history, run_screen, run_screen_progress
 from tickers import FALLBACK_TICKERS
 from voice import VoiceContext, handle_voice_query, is_configured
 
@@ -35,7 +35,7 @@ def _resolve_tickers(universe: str, watchlist: str) -> list[str]:
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "data_source": data_source()}
 
 
 @app.get("/api/tickers")

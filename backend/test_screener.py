@@ -1,10 +1,14 @@
 """Sanity checks for the bounce-detection logic using synthetic OHLCV data,
 since this environment can't reach live market data to test against yfinance.
 """
+import os
+
 import numpy as np
 import pandas as pd
 
-from screener import BOUNCE_LOOKBACK_DAYS, _compute_result
+import alpaca_client
+import screener
+from screener import BOUNCE_LOOKBACK_DAYS, _compute_result, _fetch_history_batch
 
 
 def _make_history(closes: list[float]) -> pd.DataFrame:
@@ -67,9 +71,35 @@ def test_insufficient_history_returns_none():
     assert _compute_result("SHORT", hist) is None
 
 
+def test_alpaca_fetch_failure_degrades_gracefully(monkeypatch):
+    """A bad key / network error from Alpaca shouldn't crash the whole scan
+    the way an uncaught `requests` exception would — it should just come
+    back with no data for that batch, same as a yfinance ticker miss.
+    """
+    os.environ["APCA_API_KEY_ID"] = "PKtest"
+    os.environ["APCA_API_SECRET_KEY"] = "secret"
+
+    def boom(tickers, years=3):
+        raise RuntimeError("simulated Alpaca auth failure")
+
+    monkeypatch.setattr(alpaca_client, "fetch_history", boom)
+    screener._history_cache.clear()
+
+    result = _fetch_history_batch(["AAPL"])
+    assert result == {}
+
+    del os.environ["APCA_API_KEY_ID"]
+    del os.environ["APCA_API_SECRET_KEY"]
+
+
 if __name__ == "__main__":
+    class MonkeyPatch:
+        def setattr(self, obj, name, value):
+            setattr(obj, name, value)
+
     test_confirmed_ma20_bounce_in_uptrend()
     test_no_setup_when_far_from_all_mas()
     test_bearish_trend_bias()
     test_insufficient_history_returns_none()
+    test_alpaca_fetch_failure_degrades_gracefully(MonkeyPatch())
     print("All synthetic screener tests passed.")

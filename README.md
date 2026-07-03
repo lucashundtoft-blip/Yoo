@@ -5,8 +5,10 @@ MA200 vs MA400, then flags **MA20 / MA200 / MA400 bounce setups** — price
 pulling back into a rising moving average and holding/reclaiming it.
 
 Real daily OHLCV data comes from Yahoo Finance via [`yfinance`](https://pypi.org/project/yfinance/)
-(no API key needed). The S&P 500 ticker list is pulled live from Wikipedia,
-with a hardcoded large-cap fallback if that fetch fails.
+by default (no API key needed), or from
+[Alpaca's Market Data API](https://alpaca.markets/) if you configure keys —
+see **Data source** below. The S&P 500 ticker list is pulled live from
+Wikipedia, with a hardcoded large-cap fallback if that fetch fails.
 
 ## How a "bounce" is defined
 
@@ -49,15 +51,21 @@ pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
-Runs the API at `http://localhost:8000`. Quick check: `curl http://localhost:8000/api/health`.
+Runs the API at `http://localhost:8000`. Quick check:
+`curl http://localhost:8000/api/health` — the response includes
+`"data_source"` so you can confirm whether it's using yfinance or Alpaca.
 
 Optional: run the synthetic logic tests (no network required) with
-`python3 test_screener.py` and `python3 test_voice.py`.
+`python3 test_screener.py`, `python3 test_voice.py`, and
+`python3 test_alpaca_client.py`.
 
-To enable the voice assistant, copy `backend/.env.example` to `backend/.env`
-and set your own `ANTHROPIC_API_KEY` (from https://console.anthropic.com/),
-then restart uvicorn. Without a key, the rest of the app works normally —
-the mic button just shows "not configured".
+Copy `backend/.env.example` to `backend/.env` to configure either/both of:
+- `ANTHROPIC_API_KEY` for the voice assistant (see **Voice control** below)
+- `APCA_API_KEY_ID` + `APCA_API_SECRET_KEY` for Alpaca market data (see
+  **Data source** below)
+
+Both are optional — the app works fully without either, just with voice
+disabled and/or yfinance as the data source.
 
 ### Frontend
 
@@ -74,7 +82,7 @@ on port 8000 (see `frontend/vite.config.ts`).
 
 ## API
 
-- `GET /api/health` — liveness check
+- `GET /api/health` — liveness check, includes `"data_source": "yfinance"|"alpaca"`
 - `GET /api/tickers?universe=sp500|fallback` — ticker universe used
 - `GET /api/screen?universe=sp500|watchlist&watchlist=AAPL,MSFT` — run the screener, returns all results (client filters "only active")
 - `GET /api/screen/stream?universe=sp500|watchlist&watchlist=AAPL,MSFT` — same screen as Server-Sent Events, emitting `{"type":"progress","processed":N,"total":M}` as each batch of tickers finishes and a final `{"type":"done","results":[...]}`. The UI uses this for the live progress bar.
@@ -100,6 +108,33 @@ being applied.
 Requires an `ANTHROPIC_API_KEY` in `backend/.env` (see above). Without one,
 the app works fully — voice is the only thing disabled.
 
+## Data source
+
+By default the backend pulls history via `yfinance`, which scrapes Yahoo
+Finance's public endpoints — free and keyless, but unofficial and can be
+fragile (rate limits, layout changes).
+
+Setting both `APCA_API_KEY_ID` and `APCA_API_SECRET_KEY` in `backend/.env`
+switches it to [Alpaca's Market Data API](https://alpaca.markets/) instead
+— a proper, supported API. Paper trading keys work fine (data access is the
+same as live keys); grab them from
+https://app.alpaca.markets/paper/dashboard/overview → "Generate New Keys".
+Note that's a different URL from the one used to actually fetch data
+(`data.alpaca.markets`) — the paper-trading dashboard is just where you
+create the keys.
+
+The free tier uses the IEX feed (`feed=iex` in `backend/alpaca_client.py`),
+a real but partial slice of the market (not full SIP consolidated tape) —
+plenty for EOD daily-bar screening. If an Alpaca request fails (bad key,
+rate limit, network issue), that batch of tickers just comes back empty
+instead of taking down the whole scan — check the backend's console output
+for the logged error. There's no automatic fallback from Alpaca to yfinance
+mid-run; if Alpaca is configured, it's used for everything.
+
+Class-share tickers are translated automatically (`BRK-B` → `BRK.B`, Alpaca's
+convention) since the app's ticker universe otherwise uses Yahoo-style
+dashes.
+
 ## Caching & progress
 
 - Downloaded OHLCV history is cached in-process per ticker for 15 minutes
@@ -115,9 +150,11 @@ the app works fully — voice is the only thing disabled.
 
 ## Notes / next steps
 
-- First S&P 500 scan takes ~30-60s (500 tickers × 3y daily history via `yfinance`);
-  repeat scans within 15 minutes are much faster thanks to the history cache.
-- Yahoo's free data is typically delayed, not real-time — fine for end-of-day
+- First S&P 500 scan takes ~30-60s over `yfinance` (500 tickers × 3y daily
+  history); Alpaca is noticeably faster since it's a real batched API rather
+  than per-ticker scraping. Repeat scans within 15 minutes are much faster
+  either way thanks to the history cache.
+- Both data sources are end-of-day-ish, not real-time — fine for daily
   screening, not for intraday execution.
 - Natural extensions: persist scan results to disk/DB (cache survives restarts),
   add volume/RSI confirmation, email/Slack alerts when a new confirmed bounce
