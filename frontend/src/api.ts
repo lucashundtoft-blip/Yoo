@@ -1,4 +1,4 @@
-import type { ScreenResult, StockHistoryResponse } from './types';
+import type { ScreenResult, StockHistoryResponse, VoiceFilters, VoiceQueryResponse } from './types';
 
 const BASE = '/api';
 
@@ -57,6 +57,29 @@ export async function fetchStockHistory(ticker: string): Promise<StockHistoryRes
   const res = await fetch(`${BASE}/stock/${encodeURIComponent(ticker)}`);
   if (!res.ok) {
     throw new Error(`Failed to load history for ${ticker} (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function fetchVoiceStatus(): Promise<{ configured: boolean }> {
+  const res = await fetch(`${BASE}/voice/status`);
+  if (!res.ok) return { configured: false };
+  return res.json();
+}
+
+export async function sendVoiceQuery(
+  query: string,
+  filters: VoiceFilters,
+  results: ScreenResult[]
+): Promise<VoiceQueryResponse> {
+  const res = await fetch(`${BASE}/voice/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, filters, results }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail ?? `Voice request failed (${res.status})`);
   }
   return res.json();
 }

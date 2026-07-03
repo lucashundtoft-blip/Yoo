@@ -34,3 +34,25 @@ export interface StockHistoryResponse {
   ticker: string;
   candles: Candle[];
 }
+
+export type VoiceAction =
+  | { type: 'set_universe'; universe: 'sp500' | 'watchlist' }
+  | { type: 'set_watchlist'; tickers: string }
+  | { type: 'set_trend_filter'; value: string }
+  | { type: 'set_ma_filter'; value: string }
+  | { type: 'set_only_active'; enabled: boolean }
+  | { type: 'select_ticker'; ticker: string }
+  | { type: 'run_screen' };
+
+export interface VoiceQueryResponse {
+  reply: string;
+  actions: VoiceAction[];
+}
+
+export interface VoiceFilters {
+  universe: 'sp500' | 'watchlist';
+  watchlist: string;
+  trend_filter: string;
+  ma_filter: string;
+  only_active: boolean;
+}

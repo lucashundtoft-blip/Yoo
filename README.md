@@ -52,7 +52,12 @@ uvicorn main:app --reload --port 8000
 Runs the API at `http://localhost:8000`. Quick check: `curl http://localhost:8000/api/health`.
 
 Optional: run the synthetic logic tests (no network required) with
-`python3 test_screener.py`.
+`python3 test_screener.py` and `python3 test_voice.py`.
+
+To enable the voice assistant, copy `backend/.env.example` to `backend/.env`
+and set your own `ANTHROPIC_API_KEY` (from https://console.anthropic.com/),
+then restart uvicorn. Without a key, the rest of the app works normally —
+the mic button just shows "not configured".
 
 ### Frontend
 
@@ -74,6 +79,26 @@ on port 8000 (see `frontend/vite.config.ts`).
 - `GET /api/screen?universe=sp500|watchlist&watchlist=AAPL,MSFT` — run the screener, returns all results (client filters "only active")
 - `GET /api/screen/stream?universe=sp500|watchlist&watchlist=AAPL,MSFT` — same screen as Server-Sent Events, emitting `{"type":"progress","processed":N,"total":M}` as each batch of tickers finishes and a final `{"type":"done","results":[...]}`. The UI uses this for the live progress bar.
 - `GET /api/stock/{ticker}` — daily closes + MA20/200/400 for charting
+- `GET /api/voice/status` — `{"configured": bool}`, whether `ANTHROPIC_API_KEY` is set
+- `POST /api/voice/query` — `{query, filters, results}` → `{reply, actions}` (see Voice control below)
+
+## Voice control
+
+Tap the mic and talk instead of clicking through filters — e.g. "switch to
+my watchlist and run it", "only show bullish setups", "pull up Nvidia's
+chart", "how many are testing their 200 day average". Speech-to-text and
+text-to-speech run entirely in the browser (Web Speech API — Chrome/Edge
+only, no key needed); the transcript is sent to the backend, which asks
+Claude (`claude-haiku-4-5-20251001`, via the Anthropic API) to produce a
+short spoken reply plus a list of UI actions (`set_universe`,
+`set_watchlist`, `set_trend_filter`, `set_ma_filter`, `set_only_active`,
+`select_ticker`, `run_screen`). The model only ever sees the filters and
+currently-loaded results already on screen — it can't see or invent prices
+you haven't scanned for, and every action is validated server-side before
+being applied.
+
+Requires an `ANTHROPIC_API_KEY` in `backend/.env` (see above). Without one,
+the app works fully — voice is the only thing disabled.
 
 ## Caching & progress
 

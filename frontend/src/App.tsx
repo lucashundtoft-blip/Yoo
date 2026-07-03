@@ -3,7 +3,8 @@ import { streamScreen } from './api';
 import FilterBar from './components/FilterBar';
 import ResultsTable from './components/ResultsTable';
 import StockChart from './components/StockChart';
-import type { ScreenResult } from './types';
+import VoiceControl from './components/VoiceControl';
+import type { ScreenResult, VoiceAction } from './types';
 
 export default function App() {
   const [universe, setUniverse] = useState<'sp500' | 'watchlist'>('sp500');
@@ -22,8 +23,11 @@ export default function App() {
   const cancelRef = useRef<(() => void) | null>(null);
   useEffect(() => () => cancelRef.current?.(), []);
 
-  function runScreen() {
-    if (universe === 'watchlist' && !watchlist.trim()) {
+  function runScreen(override?: { universe?: 'sp500' | 'watchlist'; watchlist?: string }) {
+    const effectiveUniverse = override?.universe ?? universe;
+    const effectiveWatchlist = override?.watchlist ?? watchlist;
+
+    if (effectiveUniverse === 'watchlist' && !effectiveWatchlist.trim()) {
       setError('Add at least one ticker to your watchlist.');
       return;
     }
@@ -34,7 +38,7 @@ export default function App() {
     setProgress({ processed: 0, total: 0 });
 
     cancelRef.current = streamScreen(
-      { universe, watchlist },
+      { universe: effectiveUniverse, watchlist: effectiveWatchlist },
       {
         onProgress: (processed, total) => setProgress({ processed, total }),
         onDone: (screenResults) => {
@@ -51,6 +55,49 @@ export default function App() {
         },
       }
     );
+  }
+
+  // Applies a batch of voice-driven actions. Filter/watchlist/universe
+  // setters update state as usual, but run_screen uses locally tracked
+  // "effective" values instead of the (still-stale, pre-render) React
+  // state so a single voice command like "switch to my watchlist and run
+  // it" doesn't scan against the universe that was active before the command.
+  function handleVoiceActions(actions: VoiceAction[]) {
+    let effectiveUniverse = universe;
+    let effectiveWatchlist = watchlist;
+    let shouldRun = false;
+
+    for (const action of actions) {
+      switch (action.type) {
+        case 'set_universe':
+          effectiveUniverse = action.universe;
+          setUniverse(action.universe);
+          break;
+        case 'set_watchlist':
+          effectiveWatchlist = action.tickers;
+          setWatchlist(action.tickers);
+          break;
+        case 'set_trend_filter':
+          setTrendFilter(action.value);
+          break;
+        case 'set_ma_filter':
+          setMaFilter(action.value);
+          break;
+        case 'set_only_active':
+          setOnlyActive(action.enabled);
+          break;
+        case 'select_ticker':
+          setSelectedTicker(action.ticker);
+          break;
+        case 'run_screen':
+          shouldRun = true;
+          break;
+      }
+    }
+
+    if (shouldRun) {
+      runScreen({ universe: effectiveUniverse, watchlist: effectiveWatchlist });
+    }
   }
 
   const filtered = useMemo(() => {
@@ -73,6 +120,20 @@ export default function App() {
           </p>
         </header>
 
+        <div className="mb-4">
+          <VoiceControl
+            filters={{
+              universe,
+              watchlist,
+              trend_filter: trendFilter,
+              ma_filter: maFilter,
+              only_active: onlyActive,
+            }}
+            results={filtered}
+            onActions={handleVoiceActions}
+          />
+        </div>
+
         <FilterBar
           universe={universe}
           onUniverseChange={setUniverse}
@@ -84,7 +145,7 @@ export default function App() {
           onTrendFilterChange={setTrendFilter}
           maFilter={maFilter}
           onMaFilterChange={setMaFilter}
-          onRun={runScreen}
+          onRun={() => runScreen()}
           loading={loading}
           progress={progress}
         />

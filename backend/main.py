@@ -1,11 +1,18 @@
 import json
+from collections import Counter
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 from screener import get_sp500_tickers, get_stock_history, run_screen, run_screen_progress
 from tickers import FALLBACK_TICKERS
+from voice import VoiceContext, handle_voice_query, is_configured
 
 app = FastAPI(title="Stock Screener API")
 
@@ -68,3 +75,55 @@ def screen_stream(
 @app.get("/api/stock/{ticker}")
 def stock(ticker: str):
     return get_stock_history(ticker.upper())
+
+
+class VoiceFilters(BaseModel):
+    universe: str = "sp500"
+    watchlist: str = ""
+    trend_filter: str = "all"
+    ma_filter: str = "all"
+    only_active: bool = True
+
+
+class VoiceQueryRequest(BaseModel):
+    query: str
+    filters: VoiceFilters
+    results: list[dict] = []
+
+
+@app.get("/api/voice/status")
+def voice_status():
+    return {"configured": is_configured()}
+
+
+@app.post("/api/voice/query")
+def voice_query(req: VoiceQueryRequest):
+    if not is_configured():
+        raise HTTPException(
+            503,
+            "Voice assistant isn't configured: set ANTHROPIC_API_KEY in backend/.env and restart the server.",
+        )
+
+    stats = Counter()
+    for r in req.results:
+        stats[f"trend:{r.get('trend_bias')}"] += 1
+        if r.get("best_setup"):
+            stats[f"setup:{r['best_setup']}"] += 1
+
+    context = VoiceContext(
+        universe=req.filters.universe,
+        watchlist=req.filters.watchlist,
+        trend_filter=req.filters.trend_filter,
+        ma_filter=req.filters.ma_filter,
+        only_active=req.filters.only_active,
+        total_results=len(req.results),
+        stats=dict(stats),
+        sample_results=req.results[:30],
+    )
+
+    try:
+        return handle_voice_query(req.query, context)
+    except RuntimeError as e:
+        raise HTTPException(503, str(e))
+    except Exception as e:
+        raise HTTPException(502, f"Voice assistant request failed: {e}")
