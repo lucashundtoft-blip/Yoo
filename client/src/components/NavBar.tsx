@@ -17,6 +17,9 @@ export function NavBar() {
         <NavLink to="/orders" className={({ isActive }) => (isActive ? 'active' : '')}>
           Orders
         </NavLink>
+        <NavLink to="/replay" className={({ isActive }) => (isActive ? 'active' : '')}>
+          Replay
+        </NavLink>
       </nav>
       <SearchBar />
     </header>
