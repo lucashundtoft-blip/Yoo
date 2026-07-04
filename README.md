@@ -63,9 +63,26 @@ Open http://localhost:5173.
 ## Building for production
 
 ```bash
-npm run build:server
-npm run build:client
+npm run build   # builds server + client
+npm start       # serves everything (API + web app) from one process
 ```
 
-Serve `client/dist` as static files and run `node server/dist/index.js`
-(set `PORT` to override the default `4000`).
+In production the Express server also serves the built client, so a single
+process on one port runs the whole app (set `PORT` to override the default
+`4000`).
+
+## Deploying to Render (free hosting)
+
+The repo includes a `render.yaml` blueprint. To get a public URL:
+
+1. Go to [render.com](https://render.com) and sign up (choose **Sign in with
+   GitHub**).
+2. Click **New +** → **Blueprint**, and select the `Yoo` repository.
+3. Click **Deploy** — Render builds and starts the app automatically, and
+   gives you a URL like `https://yootrade.onrender.com` that works from any
+   phone or computer.
+
+Notes for the free tier: the app sleeps after ~15 minutes of inactivity (the
+first visit after that takes up to a minute to wake), and the SQLite database
+is reset whenever the service restarts or redeploys — fine for practice, but
+don't expect your paper portfolio to last forever.
