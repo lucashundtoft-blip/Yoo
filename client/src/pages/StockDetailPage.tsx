@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import type { IChartApi } from 'lightweight-charts';
 import { api, type Candle, type Portfolio, type Projection, type Quote } from '../api';
 import { Chart } from '../components/Chart';
@@ -20,6 +20,7 @@ const RANGES: { label: string; days: number; resolution: 'D' | '60' | '5'; appro
 
 export function StockDetailPage() {
   const { symbol = '' } = useParams();
+  const navigate = useNavigate();
   const [quote, setQuote] = useState<Quote | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
   const [projection, setProjection] = useState<Projection | null>(null);
@@ -102,6 +103,9 @@ export function StockDetailPage() {
             </span>
             <button className="btn btn-secondary" onClick={toggleWatchlist}>
               {inWatchlist ? '− Watchlist' : '+ Watchlist'}
+            </button>
+            <button className="btn btn-secondary" onClick={() => navigate(`/replay/${symbol.toUpperCase()}`)}>
+              ▶ Replay
             </button>
           </div>
           {quote && (

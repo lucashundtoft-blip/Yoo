@@ -40,6 +40,16 @@ working either way.
 
 All indicators are toggled from checkboxes above the chart.
 
+## Market Replay
+
+The **Replay** page (or the ▶ Replay button on any stock page) plays back
+historical candles bar-by-bar so you can practice trading past price action
+as if it were live — Webull/TradingView bar-replay style. Play/pause, step,
+scrub, and speed controls (1x–10x); each session gets its own fresh $100,000
+practice account with a live P&L scoreboard and trade log, kept separate
+from your main paper portfolio. Indicators and the trend projection are
+computed only from candles revealed so far — no peeking at the future.
+
 ## Running locally
 
 ```bash
