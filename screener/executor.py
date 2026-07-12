@@ -51,13 +51,18 @@ def fetch_history(tickers: list[str], period: str) -> dict[str, pd.DataFrame]:
     return per_ticker
 
 
-def run(tickers: list[str], period: str, tolerance: float, lookback: int) -> pd.DataFrame:
+def run(tickers: list[str], period: str, tolerance: float, volume_tolerance: float, lookback: int) -> pd.DataFrame:
     print(f"Fetching {len(tickers)} tickers ({period} of daily history)...")
     histories = fetch_history(tickers, period)
 
     rows = []
     for ticker, df in histories.items():
-        match = check_coil(df, tightness_tolerance=tolerance, trend_lookback=lookback)
+        match = check_coil(
+            df,
+            tightness_tolerance=tolerance,
+            volume_tolerance=volume_tolerance,
+            trend_lookback=lookback,
+        )
         if match:
             rows.append({"ticker": ticker, **match})
 
@@ -72,13 +77,14 @@ def main():
     parser.add_argument("--tickers", help="Path to a file with one ticker per line. Defaults to the S&P 500.")
     parser.add_argument("--period", default="9mo", help="yfinance history period (default: 9mo)")
     parser.add_argument("--tolerance", type=float, default=0.03, help="Max MA spread as a fraction of price (default: 0.03)")
+    parser.add_argument("--volume-tolerance", type=float, default=0.03, help="Max deviation of volume from its 20-day average, as a fraction (default: 0.03)")
     parser.add_argument("--lookback", type=int, default=10, help="Days used to confirm the slow MA is rising (default: 10)")
     parser.add_argument("--out", help="Optional CSV path to save matches to")
     args = parser.parse_args()
 
     tickers = load_tickers_from_file(args.tickers) if args.tickers else get_sp500_tickers()
 
-    results = run(tickers, args.period, args.tolerance, args.lookback)
+    results = run(tickers, args.period, args.tolerance, args.volume_tolerance, args.lookback)
 
     if results.empty:
         print("No coiled uptrend matches found.")
