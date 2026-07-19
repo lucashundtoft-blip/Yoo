@@ -29,6 +29,7 @@ export function RsiChart({ candles, period = 14, mainChart }: RsiChartProps) {
       layout: {
         background: { type: ColorType.Solid, color: '#14181d' },
         textColor: '#8b939d',
+        attributionLogo: false,
       },
       grid: {
         vertLines: { color: '#1c2128' },

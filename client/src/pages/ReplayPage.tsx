@@ -42,6 +42,7 @@ export function ReplayPage() {
   const [smaPeriods, setSmaPeriods] = useState<number[]>([20]);
   const [showProjection, setShowProjection] = useState(true);
   const [showRsi, setShowRsi] = useState(false);
+  const [heikinAshi, setHeikinAshi] = useState(false);
   const [mainChartApi, setMainChartApi] = useState<IChartApi | null>(null);
 
   // Sandboxed practice account for this replay session only.
@@ -245,6 +246,10 @@ export function ReplayPage() {
                   <input type="checkbox" checked={showRsi} onChange={(e) => setShowRsi(e.target.checked)} />
                   RSI (14)
                 </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
+                  <input type="checkbox" checked={heikinAshi} onChange={(e) => setHeikinAshi(e.target.checked)} />
+                  Heikin-Ashi
+                </label>
               </div>
             </div>
 
@@ -294,6 +299,7 @@ export function ReplayPage() {
               projection={projection}
               showProjection={showProjection}
               smaPeriods={smaPeriods}
+              heikinAshi={heikinAshi}
               onChartApi={setMainChartApi}
             />
           </div>
