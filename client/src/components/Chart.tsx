@@ -48,11 +48,11 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
     });
 
     const candleSeries = chart.addCandlestickSeries({
-      upColor: '#17c964',
-      downColor: '#f5304a',
+      upColor: '#3987e5',
+      downColor: '#d95926',
       borderVisible: false,
-      wickUpColor: '#17c964',
-      wickDownColor: '#f5304a',
+      wickUpColor: '#3987e5',
+      wickDownColor: '#d95926',
     });
 
     const trendSeries = chart.addLineSeries({
