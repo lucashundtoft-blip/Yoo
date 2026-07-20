@@ -40,8 +40,8 @@ export function ReplayPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [smaPeriods, setSmaPeriods] = useState<number[]>([20]);
-  const [showProjection, setShowProjection] = useState(true);
+  const [smaPeriods, setSmaPeriods] = useState<number[]>([]);
+  const [showProjection, setShowProjection] = useState(false);
   const [showRsi, setShowRsi] = useState(false);
   const [heikinAshi, setHeikinAshi] = useState(false);
   const [mainChartApi, setMainChartApi] = useState<IChartApi | null>(null);
@@ -57,6 +57,9 @@ export function ReplayPage() {
 
   const activeSymbol = (urlSymbol ?? 'AAPL').toUpperCase();
   const dataset = DATASETS[datasetIndex];
+  // Live-forming candle animation: settle within a fraction of the tick
+  // interval so faster speeds still animate but never fall behind.
+  const tickAnimationMs = Math.min(350, (1000 / speed) * 0.75);
 
   const visible = useMemo(() => allCandles.slice(0, cursor), [allCandles, cursor]);
   const current = visible[visible.length - 1] ?? null;
@@ -364,6 +367,7 @@ export function ReplayPage() {
               heikinAshi={heikinAshi}
               onChartApi={setMainChartApi}
               onHoverBar={setHoverBar}
+              tickAnimationMs={tickAnimationMs}
             />
           </div>
 
