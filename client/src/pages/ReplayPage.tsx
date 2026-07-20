@@ -17,10 +17,32 @@ const DATASETS: { label: string; short: string; days: number; resolution: 'D' | 
 ];
 
 const SPEEDS = [1, 2, 5, 10];
-const FALLBACK_TICKERS = ['AAPL', 'TSLA', 'NVDA', 'MSFT', 'AMZN'];
+const FALLBACK_TICKERS = ['AAPL', 'AMD', 'MU', 'TSLA', 'NVDA'];
 const WARMUP = 20; // candles visible before replay starts
 const SESSION_CASH = 100_000;
 const AVAILABLE_SMA_PERIODS = [20, 200, 400];
+const RECENT_SYMBOLS_KEY = 'yootrade:replay:recent-symbols';
+const MAX_RECENT_SYMBOLS = 8;
+
+function loadRecentSymbols(): string[] {
+  try {
+    const raw = localStorage.getItem(RECENT_SYMBOLS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((s) => typeof s === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberSymbol(symbol: string, current: string[]): string[] {
+  const next = [symbol, ...current.filter((s) => s !== symbol)].slice(0, MAX_RECENT_SYMBOLS);
+  try {
+    localStorage.setItem(RECENT_SYMBOLS_KEY, JSON.stringify(next));
+  } catch {
+    // localStorage unavailable (private browsing, etc.) — just skip persisting
+  }
+  return next;
+}
 
 interface ReplayTrade {
   side: 'BUY' | 'SELL';
@@ -48,6 +70,7 @@ export function ReplayPage() {
   const [mainChartApi, setMainChartApi] = useState<IChartApi | null>(null);
   const [hoverBar, setHoverBar] = useState<HoverBar | null>(null);
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>([]);
+  const [recentSymbols, setRecentSymbols] = useState<string[]>(() => loadRecentSymbols());
 
   // Sandboxed practice account for this replay session only.
   const [cash, setCash] = useState(SESSION_CASH);
@@ -119,6 +142,7 @@ export function ReplayPage() {
       } else {
         setAllCandles(candles);
         resetSession();
+        setRecentSymbols((prev) => rememberSymbol(s, prev));
         if (s !== activeSymbol) navigate(`/replay/${s}`, { replace: true });
       }
     } catch (e) {
@@ -137,7 +161,8 @@ export function ReplayPage() {
     api.getWatchlist().then(setWatchlistSymbols).catch(() => setWatchlistSymbols([]));
   }, []);
 
-  const tickerChips = watchlistSymbols.length > 0 ? watchlistSymbols : FALLBACK_TICKERS;
+  const tickerChips =
+    recentSymbols.length > 0 ? recentSymbols : watchlistSymbols.length > 0 ? watchlistSymbols : FALLBACK_TICKERS;
 
   useEffect(() => {
     if (!playing) return;
@@ -400,7 +425,7 @@ export function ReplayPage() {
               tickAnimationMs={tickAnimationMs}
               tradeMarkers={tradeMarkers}
               positionLine={positionLine}
-              height="clamp(320px, 55vh, 560px)"
+              height="clamp(320px, 55dvh, 560px)"
             />
           </div>
 

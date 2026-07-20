@@ -189,6 +189,8 @@ export function Chart({
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: '#262b33' },
       timeScale: { borderColor: '#262b33', timeVisible: true },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+      handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
       width: containerRef.current.clientWidth,
       height: containerRef.current.clientHeight,
     });
