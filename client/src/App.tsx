@@ -5,6 +5,7 @@ import { StockDetailPage } from './pages/StockDetailPage';
 import { PortfolioPage } from './pages/PortfolioPage';
 import { OrdersPage } from './pages/OrdersPage';
 import { ReplayPage } from './pages/ReplayPage';
+import { FuturesHeatmapPage } from './pages/FuturesHeatmapPage';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/replay" element={<ReplayPage />} />
             <Route path="/replay/:symbol" element={<ReplayPage />} />
+            <Route path="/futures" element={<FuturesHeatmapPage />} />
           </Routes>
         </main>
       </div>
