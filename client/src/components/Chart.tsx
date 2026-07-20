@@ -24,6 +24,7 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const trendSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const forecastSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const smaSeriesRef = useRef<Map<number, ISeriesApi<'Line'>>>(new Map());
@@ -54,6 +55,19 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
       wickUpColor: '#3987e5',
       wickDownColor: '#d95926',
     });
+    candleSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.1, bottom: 0.28 },
+    });
+
+    const volumeSeries = chart.addHistogramSeries({
+      priceFormat: { type: 'volume' },
+      priceScaleId: '',
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.82, bottom: 0 },
+    });
 
     const trendSeries = chart.addLineSeries({
       color: '#2f81f7',
@@ -72,6 +86,7 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
 
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
+    volumeSeriesRef.current = volumeSeries;
     trendSeriesRef.current = trendSeries;
     forecastSeriesRef.current = forecastSeries;
     onChartApi?.(chart);
@@ -98,6 +113,13 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
         high: c.high,
         low: c.low,
         close: c.close,
+      }))
+    );
+    volumeSeriesRef.current?.setData(
+      candles.map((c) => ({
+        time: c.time as UTCTimestamp,
+        value: c.volume,
+        color: c.close >= c.open ? 'rgba(57, 135, 229, 0.5)' : 'rgba(217, 89, 38, 0.5)',
       }))
     );
     chartRef.current?.timeScale().fitContent();

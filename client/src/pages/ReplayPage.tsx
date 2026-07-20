@@ -8,11 +8,11 @@ import { computeProjection } from '../projection';
 import { formatCurrency, formatSigned, formatPercent, changeClass } from '../format';
 import { SMA_COLORS } from '../sma';
 
-const DATASETS: { label: string; days: number; resolution: 'D' | '60' | '5' }[] = [
-  { label: '1 day (5-min bars)', days: 1, resolution: '5' },
-  { label: '5 days (hourly bars)', days: 5, resolution: '60' },
-  { label: '6 months (daily bars)', days: 180, resolution: 'D' },
-  { label: '1 year (daily bars)', days: 365, resolution: 'D' },
+const DATASETS: { label: string; short: string; days: number; resolution: 'D' | '60' | '5' }[] = [
+  { label: '1 day (5-min bars)', short: '1D', days: 1, resolution: '5' },
+  { label: '5 days (hourly bars)', short: '5D', days: 5, resolution: '60' },
+  { label: '6 months (daily bars)', short: '6M', days: 180, resolution: 'D' },
+  { label: '1 year (daily bars)', short: '1Y', days: 365, resolution: 'D' },
 ];
 
 const SPEEDS = [1, 2, 5, 10];
@@ -184,18 +184,6 @@ export function ReplayPage() {
             }}
             placeholder="Symbol"
           />
-          <select
-            className="search-input"
-            style={{ width: 190 }}
-            value={datasetIndex}
-            onChange={(e) => setDatasetIndex(Number(e.target.value))}
-          >
-            {DATASETS.map((d, i) => (
-              <option key={d.label} value={i}>
-                {d.label}
-              </option>
-            ))}
-          </select>
           <button
             className="btn btn-secondary"
             onClick={() => navigate(`/replay/${symbolInput.trim().toUpperCase()}`)}
@@ -211,6 +199,13 @@ export function ReplayPage() {
       <div className="grid-2">
         <div>
           <div className="card" style={{ marginBottom: 20 }}>
+            <div className="tabs">
+              {DATASETS.map((d, i) => (
+                <button key={d.label} title={d.label} className={i === datasetIndex ? 'active' : ''} onClick={() => setDatasetIndex(i)}>
+                  {d.short}
+                </button>
+              ))}
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 10 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button className="btn btn-secondary" onClick={() => setPlaying(!playing)} disabled={finished || !allCandles.length}>
