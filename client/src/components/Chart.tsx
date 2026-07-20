@@ -11,6 +11,8 @@ import type { Candle, Projection } from '../api';
 import { computeSMA, SMA_COLORS } from '../sma';
 import { toHeikinAshi } from '../heikinAshi';
 
+const BOLD_SMA_PERIODS = new Set([20, 200, 400]);
+
 export interface HoverBar {
   time: number;
   open: number;
@@ -69,11 +71,11 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
     });
 
     const candleSeries = chart.addCandlestickSeries({
-      upColor: '#3987e5',
-      downColor: '#d95926',
+      upColor: '#15803d',
+      downColor: '#2f8fff',
       borderVisible: false,
-      wickUpColor: '#3987e5',
-      wickDownColor: '#d95926',
+      wickUpColor: '#15803d',
+      wickDownColor: '#2f8fff',
     });
     candleSeries.priceScale().applyOptions({
       scaleMargins: { top: 0.1, bottom: 0.28 },
@@ -91,14 +93,14 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
 
     const trendSeries = chart.addLineSeries({
       color: '#2f81f7',
-      lineWidth: 2,
+      lineWidth: 3,
       lastValueVisible: false,
       priceLineVisible: false,
     });
 
     const forecastSeries = chart.addLineSeries({
       color: '#e0a52c',
-      lineWidth: 2,
+      lineWidth: 3,
       lineStyle: 2, // dashed
       lastValueVisible: false,
       priceLineVisible: false,
@@ -160,7 +162,7 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
       candles.map((c) => ({
         time: c.time as UTCTimestamp,
         value: c.volume,
-        color: c.close >= c.open ? 'rgba(57, 135, 229, 0.5)' : 'rgba(217, 89, 38, 0.5)',
+        color: c.close >= c.open ? 'rgba(21, 128, 61, 0.6)' : 'rgba(47, 143, 255, 0.6)',
       }))
     );
     chartRef.current?.timeScale().fitContent();
@@ -200,7 +202,7 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
       if (!map.has(period)) {
         const series = chart.addLineSeries({
           color: SMA_COLORS[period] ?? '#8b939d',
-          lineWidth: 2,
+          lineWidth: BOLD_SMA_PERIODS.has(period) ? 3 : 2,
           lastValueVisible: false,
           priceLineVisible: false,
         });

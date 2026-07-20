@@ -65,6 +65,10 @@ export function ReplayPage() {
   const tickChangePercent = current && prevBar && prevBar.close ? (tickChange / prevBar.close) * 100 : 0;
   const finished = allCandles.length > 0 && cursor >= allCandles.length;
 
+  const rangeLow = visible.length ? Math.min(...visible.map((c) => c.low)) : 0;
+  const rangeHigh = visible.length ? Math.max(...visible.map((c) => c.high)) : 0;
+  const rangePct = rangeHigh > rangeLow ? Math.min(100, Math.max(0, ((price - rangeLow) / (rangeHigh - rangeLow)) * 100)) : 50;
+
   const displayBar: HoverBar | null =
     hoverBar ??
     (current
@@ -175,6 +179,36 @@ export function ReplayPage() {
               <span className={changeClass(tickChange)} style={{ fontSize: 18, fontWeight: 700 }}>
                 {formatSigned(tickChange)} ({formatPercent(tickChangePercent)})
               </span>
+            </div>
+          )}
+          {current && rangeHigh > rangeLow && (
+            <div style={{ marginTop: 10, maxWidth: 320 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                Range (revealed so far)
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-dim)', fontVariantNumeric: 'tabular-nums' }}>
+                  {formatCurrency(rangeLow)}
+                </span>
+                <div style={{ position: 'relative', flex: 1, height: 4, borderRadius: 2, background: 'var(--border)' }}>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: -4,
+                      left: `${rangePct}%`,
+                      transform: 'translateX(-50%)',
+                      width: 12,
+                      height: 12,
+                      borderRadius: '50%',
+                      background: 'var(--accent)',
+                      border: '2px solid var(--bg-elevated)',
+                    }}
+                  />
+                </div>
+                <span style={{ fontSize: 12, color: 'var(--text-dim)', fontVariantNumeric: 'tabular-nums' }}>
+                  {formatCurrency(rangeHigh)}
+                </span>
+              </div>
             </div>
           )}
           <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>
