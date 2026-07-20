@@ -87,6 +87,10 @@ button {
   background: var(--bg-hover);
 }
 
+.bottom-tabs {
+  display: none;
+}
+
 @media (max-width: 700px) {
   .navbar {
     gap: 12px;
@@ -94,17 +98,53 @@ button {
   }
 
   .navbar nav {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .navbar nav a {
-    padding: 8px 10px;
-    white-space: nowrap;
+    display: none;
   }
 
   .navbar .search-wrap {
     display: none;
+  }
+
+  .bottom-tabs {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    background: var(--bg-elevated);
+    border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .bottom-tabs a {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 8px 4px 6px;
+    color: var(--text-dim);
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .bottom-tabs a.active {
+    color: var(--accent);
+  }
+
+  body {
+    padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Below 700px the bottom tab bar is also on screen — stack the replay
+     page's sticky order bar above it instead of overlapping. */
+  .order-actions {
+    bottom: calc(58px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .main-content {
+    padding-bottom: calc(146px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
 
@@ -127,6 +167,10 @@ button {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px;
+}
+
+.card:has(table) {
+  overflow-x: auto;
 }
 
 .up {
