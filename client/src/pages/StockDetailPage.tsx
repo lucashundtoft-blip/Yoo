@@ -8,7 +8,7 @@ import { OrderPanel } from '../components/OrderPanel';
 import { formatCurrency, formatPercent, changeClass } from '../format';
 import { SMA_COLORS } from '../sma';
 
-const AVAILABLE_SMA_PERIODS = [20, 50];
+const AVAILABLE_SMA_PERIODS = [20, 50, 200, 400];
 
 const RANGES: { label: string; days: number; resolution: 'D' | '60' | '5'; approxCandles: number }[] = [
   { label: '1D', days: 1, resolution: '5', approxCandles: 78 },

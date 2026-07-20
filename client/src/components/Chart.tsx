@@ -44,7 +44,7 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
       rightPriceScale: { borderColor: '#262b33' },
       timeScale: { borderColor: '#262b33', timeVisible: true },
       width: containerRef.current.clientWidth,
-      height: 420,
+      height: 560,
     });
 
     const candleSeries = chart.addCandlestickSeries({

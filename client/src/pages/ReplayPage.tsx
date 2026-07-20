@@ -18,7 +18,7 @@ const DATASETS: { label: string; days: number; resolution: 'D' | '60' | '5' }[] 
 const SPEEDS = [1, 2, 5, 10];
 const WARMUP = 20; // candles visible before replay starts
 const SESSION_CASH = 100_000;
-const AVAILABLE_SMA_PERIODS = [20, 50];
+const AVAILABLE_SMA_PERIODS = [20, 50, 200, 400];
 
 interface ReplayTrade {
   side: 'BUY' | 'SELL';
@@ -58,7 +58,10 @@ export function ReplayPage() {
 
   const visible = useMemo(() => allCandles.slice(0, cursor), [allCandles, cursor]);
   const current = visible[visible.length - 1] ?? null;
+  const prevBar = visible[visible.length - 2] ?? null;
   const price = current?.close ?? 0;
+  const tickChange = current && prevBar ? current.close - prevBar.close : 0;
+  const tickChangePercent = current && prevBar && prevBar.close ? (tickChange / prevBar.close) * 100 : 0;
   const finished = allCandles.length > 0 && cursor >= allCandles.length;
 
   const projection = useMemo(() => {
@@ -158,6 +161,14 @@ export function ReplayPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0 }}>Market Replay — {activeSymbol}</h2>
+          {current && (
+            <div style={{ marginTop: 6, display: 'flex', alignItems: 'baseline', gap: 12 }}>
+              <span style={{ fontSize: 36, fontWeight: 800 }}>{formatCurrency(price)}</span>
+              <span className={changeClass(tickChange)} style={{ fontSize: 18, fontWeight: 700 }}>
+                {formatSigned(tickChange)} ({formatPercent(tickChangePercent)})
+              </span>
+            </div>
+          )}
           <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>
             Practice on past price action, bar by bar, with a fresh {formatCurrency(SESSION_CASH, 0)} practice account per session.
           </div>
