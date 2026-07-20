@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Video sequence ({{ videos|length }})</h1>
+
+{% if videos %}
+<div class="player-wrap">
+  <video id="player" controls autoplay></video>
+  <div id="now-playing"></div>
+</div>
+
+<ol id="playlist" class="playlist">
+  {% for v in videos %}
+    <li data-src="/file/{{ v['local_path'] }}" data-title="{{ v['title'] }}">
+      {{ v['title'] }} {% if v['dataset'] %}<span class="tag">{{ v['dataset'] }}</span>{% endif %}
+    </li>
+  {% endfor %}
+</ol>
+
+<script>
+  const items = Array.from(document.querySelectorAll('#playlist li'));
+  const player = document.getElementById('player');
+  const nowPlaying = document.getElementById('now-playing');
+  let current = 0;
+
+  function play(index) {
+    if (index < 0 || index >= items.length) return;
+    current = index;
+    items.forEach(li => li.classList.remove('active'));
+    items[current].classList.add('active');
+    player.src = items[current].dataset.src;
+    nowPlaying.textContent = `${current + 1} / ${items.length}: ${items[current].dataset.title}`;
+    player.play();
+  }
+
+  player.addEventListener('ended', () => play(current + 1));
+  items.forEach((li, i) => li.addEventListener('click', () => play(i)));
+
+  play(0);
+</script>
+{% else %}
+  <p>No videos indexed yet. Run the fetcher, then <code>python -m indexer.build_index</code>.</p>
+{% endif %}
+{% endblock %}

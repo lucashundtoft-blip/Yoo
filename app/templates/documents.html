@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Documents ({{ documents|length }})</h1>
+<ul class="results">
+  {% for d in documents %}
+    <li class="result">
+      <div class="result-title">
+        <a href="/file/{{ d['local_path'] }}" target="_blank">{{ d['title'] }}</a>
+        {% if d['dataset'] %}<span class="tag">{{ d['dataset'] }}</span>{% endif %}
+        {% if not d['text_extracted'] %}<span class="tag warn">no text extracted</span>{% endif %}
+      </div>
+    </li>
+  {% else %}
+    <li>No documents indexed yet. Run the fetcher, then <code>python -m indexer.build_index</code>.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

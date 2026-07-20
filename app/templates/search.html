@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Search documents</h1>
+<form action="/search" method="get" class="search-form">
+  <input type="text" name="q" value="{{ query }}" placeholder="e.g. trump" autofocus>
+  <button type="submit">Search</button>
+</form>
+
+{% if query %}
+  <p>{{ results|length }} result(s) for <strong>{{ query }}</strong></p>
+  <ul class="results">
+    {% for r in results %}
+      <li class="result">
+        <div class="result-title">
+          <a href="/file/{{ r['local_path'] }}" target="_blank">{{ r['title'] }}</a>
+          {% if r['dataset'] %}<span class="tag">{{ r['dataset'] }}</span>{% endif %}
+        </div>
+        <div class="snippet">{{ r['snippet_html']|safe }}</div>
+      </li>
+    {% else %}
+      <li>No matches.</li>
+    {% endfor %}
+  </ul>
+{% endif %}
+{% endblock %}

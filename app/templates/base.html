@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Epstein Files Research Tool{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/" class="brand">Epstein Files Research Tool</a>
+      <a href="/search">Search</a>
+      <a href="/documents">Documents</a>
+      <a href="/videos">Video sequence</a>
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer>
+    <p>Personal research tool over publicly released DOJ records (Epstein Files Transparency Act, Nov 2025). Not affiliated with DOJ.</p>
+  </footer>
+</body>
+</html>
