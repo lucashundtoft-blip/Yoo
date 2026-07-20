@@ -16,6 +16,7 @@ const RANGES: { label: string; days: number; resolution: 'D' | '60' | '5'; appro
   { label: '1M', days: 30, resolution: 'D', approxCandles: 30 },
   { label: '6M', days: 180, resolution: 'D', approxCandles: 180 },
   { label: '1Y', days: 365, resolution: 'D', approxCandles: 365 },
+  { label: '2Y', days: 730, resolution: 'D', approxCandles: 730 },
 ];
 
 export function StockDetailPage() {
@@ -180,6 +181,10 @@ export function StockDetailPage() {
                     <span>
                       <span className="legend-swatch" style={{ background: '#e0a52c' }} />
                       Projected ({projection.direction})
+                    </span>
+                    <span>
+                      <span className="legend-swatch" style={{ background: '#8b939d' }} />
+                      Trend channel
                     </span>
                   </>
                 )}

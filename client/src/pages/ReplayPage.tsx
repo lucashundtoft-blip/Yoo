@@ -13,6 +13,7 @@ const DATASETS: { label: string; short: string; days: number; resolution: 'D' | 
   { label: '5 days (hourly bars)', short: '5D', days: 5, resolution: '60' },
   { label: '6 months (daily bars)', short: '6M', days: 180, resolution: 'D' },
   { label: '1 year (daily bars)', short: '1Y', days: 365, resolution: 'D' },
+  { label: '2 years (daily bars)', short: '2Y', days: 730, resolution: 'D' },
 ];
 
 const SPEEDS = [1, 2, 5, 10];
@@ -346,6 +347,10 @@ export function ReplayPage() {
                     <span>
                       <span className="legend-swatch" style={{ background: '#e0a52c' }} />
                       Projected ({projection.direction})
+                    </span>
+                    <span>
+                      <span className="legend-swatch" style={{ background: '#8b939d' }} />
+                      Trend channel
                     </span>
                   </>
                 )}

@@ -22,6 +22,7 @@ export function RsiChart({ candles, period = 14, mainChart }: RsiChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const prevInfoRef = useRef<{ length: number; lastTime: number | null }>({ length: 0, lastTime: null });
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -86,7 +87,13 @@ export function RsiChart({ candles, period = 14, mainChart }: RsiChartProps) {
     seriesRef.current.setData(
       computeRSI(candles, period).map((p) => ({ time: p.time as UTCTimestamp, value: p.value }))
     );
-    chartRef.current?.timeScale().fitContent();
+    const prev = prevInfoRef.current;
+    const isSimpleAppend =
+      prev.length > 0 && candles.length === prev.length + 1 && candles[prev.length - 1]?.time === prev.lastTime;
+    if (!isSimpleAppend) {
+      chartRef.current?.timeScale().fitContent();
+    }
+    prevInfoRef.current = { length: candles.length, lastTime: candles[candles.length - 1]?.time ?? null };
   }, [candles, period]);
 
   // Keep this pane's time scale in lockstep with the main price chart.

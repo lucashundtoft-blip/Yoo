@@ -10,6 +10,7 @@ import {
 import type { Candle, Projection } from '../api';
 import { computeSMA, SMA_COLORS } from '../sma';
 import { toHeikinAshi } from '../heikinAshi';
+import { computeTrendChannel } from '../projection';
 
 const BOLD_SMA_PERIODS = new Set([20, 200, 400]);
 
@@ -39,9 +40,17 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const trendSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const forecastSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const channelUpperSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const channelLowerSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const smaSeriesRef = useRef<Map<number, ISeriesApi<'Line'>>>(new Map());
   const candlesRef = useRef<Candle[]>(candles);
   const onHoverBarRef = useRef(onHoverBar);
+  const prevCandlesInfoRef = useRef<{ length: number; lastTime: number | null; heikinAshi: boolean }>({
+    length: 0,
+    lastTime: null,
+    heikinAshi: false,
+  });
+  const haStateRef = useRef<{ open: number; close: number } | null>(null);
 
   useEffect(() => {
     candlesRef.current = candles;
@@ -106,11 +115,29 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
       priceLineVisible: false,
     });
 
+    const channelUpperSeries = chart.addLineSeries({
+      color: '#8b939d',
+      lineWidth: 2,
+      lineStyle: 2, // dashed
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+
+    const channelLowerSeries = chart.addLineSeries({
+      color: '#8b939d',
+      lineWidth: 2,
+      lineStyle: 2, // dashed
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
     volumeSeriesRef.current = volumeSeries;
     trendSeriesRef.current = trendSeries;
     forecastSeriesRef.current = forecastSeries;
+    channelUpperSeriesRef.current = channelUpperSeries;
+    channelLowerSeriesRef.current = channelLowerSeries;
     onChartApi?.(chart);
 
     const handleCrosshairMove: Parameters<typeof chart.subscribeCrosshairMove>[0] = (param) => {
@@ -147,32 +174,65 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
   }, []);
 
   useEffect(() => {
-    if (!candleSeriesRef.current) return;
-    const displayCandles = heikinAshi ? toHeikinAshi(candles) : candles;
-    candleSeriesRef.current.setData(
-      displayCandles.map((c) => ({
-        time: c.time as UTCTimestamp,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      }))
-    );
-    volumeSeriesRef.current?.setData(
-      candles.map((c) => ({
-        time: c.time as UTCTimestamp,
-        value: c.volume,
-        color: c.close >= c.open ? 'rgba(21, 128, 61, 0.6)' : 'rgba(47, 143, 255, 0.6)',
-      }))
-    );
-    chartRef.current?.timeScale().fitContent();
+    const candleSeries = candleSeriesRef.current;
+    const volumeSeries = volumeSeriesRef.current;
+    if (!candleSeries) return;
+
+    const prev = prevCandlesInfoRef.current;
+    const isSimpleAppend =
+      Boolean(heikinAshi) === prev.heikinAshi &&
+      prev.length > 0 &&
+      candles.length === prev.length + 1 &&
+      candles[prev.length - 1]?.time === prev.lastTime;
+
+    const volumeColor = (c: Candle) => (c.close >= c.open ? 'rgba(21, 128, 61, 0.6)' : 'rgba(47, 143, 255, 0.6)');
+
+    if (isSimpleAppend) {
+      // Tick-by-tick playback: append just the new bar instead of re-rendering
+      // the whole series, so the timescale doesn't jump/re-fit every tick.
+      const raw = candles[candles.length - 1];
+      let bar: { open: number; high: number; low: number; close: number };
+      if (heikinAshi && haStateRef.current) {
+        const haClose = (raw.open + raw.high + raw.low + raw.close) / 4;
+        const haOpen = (haStateRef.current.open + haStateRef.current.close) / 2;
+        bar = { open: haOpen, high: Math.max(raw.high, haOpen, haClose), low: Math.min(raw.low, haOpen, haClose), close: haClose };
+        haStateRef.current = { open: bar.open, close: bar.close };
+      } else {
+        bar = { open: raw.open, high: raw.high, low: raw.low, close: raw.close };
+      }
+      candleSeries.update({ time: raw.time as UTCTimestamp, ...bar });
+      volumeSeries?.update({ time: raw.time as UTCTimestamp, value: raw.volume, color: volumeColor(raw) });
+    } else {
+      const displayCandles = heikinAshi ? toHeikinAshi(candles) : candles;
+      candleSeries.setData(
+        displayCandles.map((c) => ({
+          time: c.time as UTCTimestamp,
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        }))
+      );
+      volumeSeries?.setData(candles.map((c) => ({ time: c.time as UTCTimestamp, value: c.volume, color: volumeColor(c) })));
+      chartRef.current?.timeScale().fitContent();
+      const lastHA = displayCandles[displayCandles.length - 1];
+      haStateRef.current = heikinAshi && lastHA ? { open: lastHA.open, close: lastHA.close } : null;
+    }
+
+    prevCandlesInfoRef.current = {
+      length: candles.length,
+      lastTime: candles[candles.length - 1]?.time ?? null,
+      heikinAshi: Boolean(heikinAshi),
+    };
   }, [candles, heikinAshi]);
 
   useEffect(() => {
-    if (!trendSeriesRef.current || !forecastSeriesRef.current) return;
+    if (!trendSeriesRef.current || !forecastSeriesRef.current || !channelUpperSeriesRef.current || !channelLowerSeriesRef.current) return;
     if (!showProjection || !projection) {
       trendSeriesRef.current.setData([]);
       forecastSeriesRef.current.setData([]);
+      channelUpperSeriesRef.current.setData([]);
+      channelLowerSeriesRef.current.setData([]);
       return;
     }
     trendSeriesRef.current.setData(
@@ -184,6 +244,9 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
     forecastSeriesRef.current.setData(
       bridge.map((p) => ({ time: p.time as UTCTimestamp, value: p.value }))
     );
+    const channel = computeTrendChannel(candlesRef.current, projection);
+    channelUpperSeriesRef.current.setData(channel.upper.map((p) => ({ time: p.time as UTCTimestamp, value: p.value })));
+    channelLowerSeriesRef.current.setData(channel.lower.map((p) => ({ time: p.time as UTCTimestamp, value: p.value })));
   }, [projection, showProjection]);
 
   useEffect(() => {

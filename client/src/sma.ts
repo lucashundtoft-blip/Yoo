@@ -5,14 +5,19 @@ export interface SmaPoint {
   value: number;
 }
 
+// Plots from the first candle using a running average over whatever history
+// is available, converging to the true N-period SMA once N candles have
+// accumulated — matches how most charting tools draw an SMA rather than
+// waiting for a full period of history before showing anything.
 export function computeSMA(candles: Candle[], period: number): SmaPoint[] {
-  if (period <= 0 || candles.length < period) return [];
+  if (period <= 0) return [];
   const result: SmaPoint[] = [];
   let sum = 0;
   for (let i = 0; i < candles.length; i++) {
     sum += candles[i].close;
     if (i >= period) sum -= candles[i - period].close;
-    if (i >= period - 1) result.push({ time: candles[i].time, value: sum / period });
+    const windowSize = Math.min(i + 1, period);
+    result.push({ time: candles[i].time, value: sum / windowSize });
   }
   return result;
 }
