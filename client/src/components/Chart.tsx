@@ -11,6 +11,15 @@ import type { Candle, Projection } from '../api';
 import { computeSMA, SMA_COLORS } from '../sma';
 import { toHeikinAshi } from '../heikinAshi';
 
+export interface HoverBar {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
 interface ChartProps {
   candles: Candle[];
   projection?: Projection | null;
@@ -18,9 +27,10 @@ interface ChartProps {
   smaPeriods: number[];
   heikinAshi?: boolean;
   onChartApi?: (chart: IChartApi) => void;
+  onHoverBar?: (bar: HoverBar | null) => void;
 }
 
-export function Chart({ candles, projection, showProjection, smaPeriods, heikinAshi, onChartApi }: ChartProps) {
+export function Chart({ candles, projection, showProjection, smaPeriods, heikinAshi, onChartApi, onHoverBar }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -28,6 +38,16 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
   const trendSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const forecastSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const smaSeriesRef = useRef<Map<number, ISeriesApi<'Line'>>>(new Map());
+  const candlesRef = useRef<Candle[]>(candles);
+  const onHoverBarRef = useRef(onHoverBar);
+
+  useEffect(() => {
+    candlesRef.current = candles;
+  }, [candles]);
+
+  useEffect(() => {
+    onHoverBarRef.current = onHoverBar;
+  }, [onHoverBar]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -91,6 +111,26 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
     forecastSeriesRef.current = forecastSeries;
     onChartApi?.(chart);
 
+    const handleCrosshairMove: Parameters<typeof chart.subscribeCrosshairMove>[0] = (param) => {
+      if (!onHoverBarRef.current) return;
+      const bar = param.time ? param.seriesData.get(candleSeries) : undefined;
+      if (!param.time || !bar) {
+        onHoverBarRef.current(null);
+        return;
+      }
+      const ohlc = bar as unknown as { open: number; high: number; low: number; close: number };
+      const volBar = candlesRef.current.find((c) => c.time === (param.time as number));
+      onHoverBarRef.current({
+        time: param.time as number,
+        open: ohlc.open,
+        high: ohlc.high,
+        low: ohlc.low,
+        close: ohlc.close,
+        volume: volBar?.volume ?? 0,
+      });
+    };
+    chart.subscribeCrosshairMove(handleCrosshairMove);
+
     const handleResize = () => {
       if (containerRef.current) chart.applyOptions({ width: containerRef.current.clientWidth });
     };
@@ -98,6 +138,7 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      chart.unsubscribeCrosshairMove(handleCrosshairMove);
       chart.remove();
       smaSeriesRef.current.clear();
     };

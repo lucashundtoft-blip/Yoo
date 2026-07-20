@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { IChartApi } from 'lightweight-charts';
 import { api, type Candle } from '../api';
-import { Chart } from '../components/Chart';
+import { Chart, type HoverBar } from '../components/Chart';
 import { RsiChart } from '../components/RsiChart';
 import { computeProjection } from '../projection';
 import { formatCurrency, formatSigned, formatPercent, changeClass } from '../format';
@@ -44,6 +44,7 @@ export function ReplayPage() {
   const [showRsi, setShowRsi] = useState(false);
   const [heikinAshi, setHeikinAshi] = useState(false);
   const [mainChartApi, setMainChartApi] = useState<IChartApi | null>(null);
+  const [hoverBar, setHoverBar] = useState<HoverBar | null>(null);
 
   // Sandboxed practice account for this replay session only.
   const [cash, setCash] = useState(SESSION_CASH);
@@ -64,6 +65,12 @@ export function ReplayPage() {
   const tickChangePercent = current && prevBar && prevBar.close ? (tickChange / prevBar.close) * 100 : 0;
   const finished = allCandles.length > 0 && cursor >= allCandles.length;
 
+  const displayBar: HoverBar | null =
+    hoverBar ??
+    (current
+      ? { time: current.time, open: current.open, high: current.high, low: current.low, close: current.close, volume: current.volume }
+      : null);
+
   const projection = useMemo(() => {
     if (!showProjection || visible.length < 4) return null;
     const lookback = Math.min(90, Math.max(8, Math.round(visible.length * 0.25)));
@@ -78,6 +85,7 @@ export function ReplayPage() {
     setTrades([]);
     setCursor(WARMUP);
     setPlaying(false);
+    setHoverBar(null);
   }
 
   async function load(symbolToLoad: string) {
@@ -259,14 +267,23 @@ export function ReplayPage() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-dim)', marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: 'var(--text-dim)', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
               <span>
                 Bar {Math.max(0, cursor)} / {allCandles.length}
                 {current ? ` — ${formatTime(current.time)}` : ''}
                 {finished ? ' — replay finished' : ''}
               </span>
-              {current && (
-                <span style={{ fontWeight: 700, color: 'var(--text)' }}>{formatCurrency(price)}</span>
+              {displayBar && (
+                <span
+                  style={{ display: 'flex', gap: 12, fontVariantNumeric: 'tabular-nums' }}
+                  className={changeClass(displayBar.close - displayBar.open)}
+                >
+                  <span>O <strong>{formatCurrency(displayBar.open)}</strong></span>
+                  <span>H <strong>{formatCurrency(displayBar.high)}</strong></span>
+                  <span>L <strong>{formatCurrency(displayBar.low)}</strong></span>
+                  <span>C <strong>{formatCurrency(displayBar.close)}</strong></span>
+                  <span style={{ color: 'var(--text-dim)' }}>Vol <strong>{displayBar.volume.toLocaleString()}</strong></span>
+                </span>
               )}
             </div>
             <input
@@ -307,6 +324,7 @@ export function ReplayPage() {
               smaPeriods={smaPeriods}
               heikinAshi={heikinAshi}
               onChartApi={setMainChartApi}
+              onHoverBar={setHoverBar}
             />
           </div>
 
@@ -360,7 +378,7 @@ export function ReplayPage() {
               <label>Quantity (shares)</label>
               <input type="number" min="0" step="1" value={orderQty} onChange={(e) => setOrderQty(e.target.value)} />
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div className="order-actions">
               <button className="btn btn-buy" style={{ flex: 1 }} disabled={!canBuy} onClick={() => trade('BUY')}>
                 Buy @ {current ? formatCurrency(price) : '—'}
               </button>
