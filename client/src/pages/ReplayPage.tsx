@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { IChartApi } from 'lightweight-charts';
 import { api, type Candle } from '../api';
-import { Chart, type HoverBar } from '../components/Chart';
+import { Chart, type HoverBar, type TradeMarker, type PositionLine } from '../components/Chart';
 import { RsiChart } from '../components/RsiChart';
 import { computeProjection } from '../projection';
 import { formatCurrency, formatSigned, formatPercent, changeClass } from '../format';
@@ -17,9 +17,10 @@ const DATASETS: { label: string; short: string; days: number; resolution: 'D' | 
 ];
 
 const SPEEDS = [1, 2, 5, 10];
+const FALLBACK_TICKERS = ['AAPL', 'TSLA', 'NVDA', 'MSFT', 'AMZN'];
 const WARMUP = 20; // candles visible before replay starts
 const SESSION_CASH = 100_000;
-const AVAILABLE_SMA_PERIODS = [20, 50, 200, 400];
+const AVAILABLE_SMA_PERIODS = [20, 200, 400];
 
 interface ReplayTrade {
   side: 'BUY' | 'SELL';
@@ -46,6 +47,7 @@ export function ReplayPage() {
   const [heikinAshi, setHeikinAshi] = useState(false);
   const [mainChartApi, setMainChartApi] = useState<IChartApi | null>(null);
   const [hoverBar, setHoverBar] = useState<HoverBar | null>(null);
+  const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>([]);
 
   // Sandboxed practice account for this replay session only.
   const [cash, setCash] = useState(SESSION_CASH);
@@ -78,6 +80,13 @@ export function ReplayPage() {
     (current
       ? { time: current.time, open: current.open, high: current.high, low: current.low, close: current.close, volume: current.volume }
       : null);
+
+  const tradeMarkers: TradeMarker[] = useMemo(
+    () => [...trades].sort((a, b) => a.time - b.time).map((t) => ({ time: t.time, side: t.side })),
+    [trades]
+  );
+  const positionLine: PositionLine | null =
+    qty > 0 ? { price: avgCost, title: `POS: ${qty} @ ${formatCurrency(avgCost)}` } : null;
 
   const projection = useMemo(() => {
     if (!showProjection || visible.length < 4) return null;
@@ -123,6 +132,12 @@ export function ReplayPage() {
     load(activeSymbol);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSymbol, datasetIndex]);
+
+  useEffect(() => {
+    api.getWatchlist().then(setWatchlistSymbols).catch(() => setWatchlistSymbols([]));
+  }, []);
+
+  const tickerChips = watchlistSymbols.length > 0 ? watchlistSymbols : FALLBACK_TICKERS;
 
   useEffect(() => {
     if (!playing) return;
@@ -219,24 +234,39 @@ export function ReplayPage() {
             Practice on past price action, bar by bar, with a fresh {formatCurrency(SESSION_CASH, 0)} practice account per session.
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input
-            className="search-input"
-            style={{ width: 110 }}
-            value={symbolInput}
-            onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') navigate(`/replay/${symbolInput.trim().toUpperCase()}`);
-            }}
-            placeholder="Symbol"
-          />
-          <button
-            className="btn btn-secondary"
-            onClick={() => navigate(`/replay/${symbolInput.trim().toUpperCase()}`)}
-            disabled={loading}
-          >
-            {loading ? 'Loading…' : 'Load'}
-          </button>
+        <div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              className="search-input"
+              style={{ width: 110 }}
+              value={symbolInput}
+              onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') navigate(`/replay/${symbolInput.trim().toUpperCase()}`);
+              }}
+              placeholder="Symbol"
+            />
+            <button
+              className="btn btn-secondary"
+              onClick={() => navigate(`/replay/${symbolInput.trim().toUpperCase()}`)}
+              disabled={loading}
+            >
+              {loading ? 'Loading…' : 'Load'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {tickerChips.map((sym) => (
+              <button
+                key={sym}
+                className="btn btn-secondary"
+                style={{ padding: '4px 10px', fontSize: 12, fontWeight: 700 }}
+                onClick={() => navigate(`/replay/${sym}`)}
+                disabled={sym === activeSymbol}
+              >
+                {sym}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -368,6 +398,9 @@ export function ReplayPage() {
               onChartApi={setMainChartApi}
               onHoverBar={setHoverBar}
               tickAnimationMs={tickAnimationMs}
+              tradeMarkers={tradeMarkers}
+              positionLine={positionLine}
+              height="clamp(320px, 55vh, 560px)"
             />
           </div>
 
