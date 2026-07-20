@@ -3,8 +3,11 @@ import {
   createChart,
   ColorType,
   CrosshairMode,
+  LineStyle,
   type IChartApi,
   type ISeriesApi,
+  type IPriceLine,
+  type SeriesMarker,
   type UTCTimestamp,
 } from 'lightweight-charts';
 import type { Candle, Projection } from '../api';
@@ -23,6 +26,16 @@ export interface HoverBar {
   volume: number;
 }
 
+export interface TradeMarker {
+  time: number;
+  side: 'BUY' | 'SELL';
+}
+
+export interface PositionLine {
+  price: number;
+  title: string;
+}
+
 interface ChartProps {
   candles: Candle[];
   projection?: Projection | null;
@@ -35,6 +48,16 @@ interface ChartProps {
    *  settling toward its final OHLC) instead of snapping in instantly —
    *  the "buyers vs. sellers" live-forming candle feel. */
   tickAnimationMs?: number;
+  /** Arrow markers on the bars where trades were placed. Must be sorted
+   *  ascending by time. */
+  tradeMarkers?: TradeMarker[];
+  /** A labeled horizontal line at the average cost of an open position,
+   *  like Webull's "POS: qty @ price" line. Omit/null to hide. */
+  positionLine?: PositionLine | null;
+  /** CSS height for the chart's container — lets the page fit the chart to
+   *  the viewport (e.g. clamp() so it never needs scrolling on mobile).
+   *  Falls back to a fixed 560px when omitted. */
+  height?: string;
 }
 
 interface OhlcBar {
@@ -53,6 +76,9 @@ export function Chart({
   onChartApi,
   onHoverBar,
   tickAnimationMs,
+  tradeMarkers,
+  positionLine,
+  height,
 }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -63,6 +89,7 @@ export function Chart({
   const channelUpperSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const channelLowerSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const smaSeriesRef = useRef<Map<number, ISeriesApi<'Line'>>>(new Map());
+  const positionPriceLineRef = useRef<IPriceLine | null>(null);
   const candlesRef = useRef<Candle[]>(candles);
   const onHoverBarRef = useRef(onHoverBar);
   const prevCandlesInfoRef = useRef<{ length: number; lastTime: number | null; heikinAshi: boolean }>({
@@ -163,7 +190,7 @@ export function Chart({
       rightPriceScale: { borderColor: '#262b33' },
       timeScale: { borderColor: '#262b33', timeVisible: true },
       width: containerRef.current.clientWidth,
-      height: 560,
+      height: containerRef.current.clientHeight,
     });
 
     const candleSeries = chart.addCandlestickSeries({
@@ -248,7 +275,9 @@ export function Chart({
     chart.subscribeCrosshairMove(handleCrosshairMove);
 
     const handleResize = () => {
-      if (containerRef.current) chart.applyOptions({ width: containerRef.current.clientWidth });
+      if (containerRef.current) {
+        chart.applyOptions({ width: containerRef.current.clientWidth, height: containerRef.current.clientHeight });
+      }
     };
     window.addEventListener('resize', handleResize);
 
@@ -368,5 +397,37 @@ export function Chart({
     }
   }, [candles, smaPeriods]);
 
-  return <div ref={containerRef} />;
+  useEffect(() => {
+    const candleSeries = candleSeriesRef.current;
+    if (!candleSeries) return;
+    const markers: SeriesMarker<UTCTimestamp>[] = (tradeMarkers ?? []).map((m) => ({
+      time: m.time as UTCTimestamp,
+      position: m.side === 'BUY' ? 'belowBar' : 'aboveBar',
+      color: m.side === 'BUY' ? '#15803d' : '#2f8fff',
+      shape: m.side === 'BUY' ? 'arrowUp' : 'arrowDown',
+      text: m.side,
+    }));
+    candleSeries.setMarkers(markers);
+  }, [tradeMarkers]);
+
+  useEffect(() => {
+    const candleSeries = candleSeriesRef.current;
+    if (!candleSeries) return;
+    if (positionPriceLineRef.current) {
+      candleSeries.removePriceLine(positionPriceLineRef.current);
+      positionPriceLineRef.current = null;
+    }
+    if (positionLine) {
+      positionPriceLineRef.current = candleSeries.createPriceLine({
+        price: positionLine.price,
+        color: '#e6e9ed',
+        lineWidth: 2,
+        lineStyle: LineStyle.Dotted,
+        axisLabelVisible: true,
+        title: positionLine.title,
+      });
+    }
+  }, [positionLine]);
+
+  return <div ref={containerRef} style={{ height: height ?? '560px', width: '100%' }} />;
 }
