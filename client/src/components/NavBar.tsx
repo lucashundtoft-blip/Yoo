@@ -20,6 +20,9 @@ export function NavBar() {
         <NavLink to="/replay" className={({ isActive }) => (isActive ? 'active' : '')}>
           Replay
         </NavLink>
+        <NavLink to="/futures" className={({ isActive }) => (isActive ? 'active' : '')}>
+          Futures
+        </NavLink>
       </nav>
       <SearchBar />
     </header>
