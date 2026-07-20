@@ -1,4 +1,29 @@
-import type { Candle, Projection } from './api';
+import type { Candle, Projection, ProjectionPoint } from './api';
+
+export interface TrendChannel {
+  upper: ProjectionPoint[];
+  lower: ProjectionPoint[];
+}
+
+// A linear-regression channel: two lines parallel to the trendline (and its
+// forecast), offset to just contain the highs/lows seen during the lookback
+// window — the "trend lines on both sides" bracketing price action.
+export function computeTrendChannel(candles: Candle[], projection: Projection): TrendChannel {
+  const byTime = new Map(candles.map((c) => [c.time, c]));
+  let maxAbove = 0;
+  let maxBelow = 0;
+  for (const p of projection.trendline) {
+    const c = byTime.get(p.time);
+    if (!c) continue;
+    maxAbove = Math.max(maxAbove, c.high - p.value);
+    maxBelow = Math.max(maxBelow, p.value - c.low);
+  }
+  const allPoints = [...projection.trendline, ...projection.forecast];
+  return {
+    upper: allPoints.map((p) => ({ time: p.time, value: p.value + maxAbove })),
+    lower: allPoints.map((p) => ({ time: p.time, value: p.value - maxBelow })),
+  };
+}
 
 /** Client-side mirror of the server's linear-regression trend projection,
  * used in replay mode where the projection must only see revealed candles. */
