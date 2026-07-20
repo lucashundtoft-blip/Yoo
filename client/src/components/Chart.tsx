@@ -11,6 +11,17 @@ import type { Candle, Projection } from '../api';
 import { computeSMA, SMA_COLORS } from '../sma';
 import { toHeikinAshi } from '../heikinAshi';
 
+const BOLD_SMA_PERIODS = new Set([20, 200, 400]);
+
+export interface HoverBar {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
 interface ChartProps {
   candles: Candle[];
   projection?: Projection | null;
@@ -18,15 +29,27 @@ interface ChartProps {
   smaPeriods: number[];
   heikinAshi?: boolean;
   onChartApi?: (chart: IChartApi) => void;
+  onHoverBar?: (bar: HoverBar | null) => void;
 }
 
-export function Chart({ candles, projection, showProjection, smaPeriods, heikinAshi, onChartApi }: ChartProps) {
+export function Chart({ candles, projection, showProjection, smaPeriods, heikinAshi, onChartApi, onHoverBar }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const trendSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const forecastSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const smaSeriesRef = useRef<Map<number, ISeriesApi<'Line'>>>(new Map());
+  const candlesRef = useRef<Candle[]>(candles);
+  const onHoverBarRef = useRef(onHoverBar);
+
+  useEffect(() => {
+    candlesRef.current = candles;
+  }, [candles]);
+
+  useEffect(() => {
+    onHoverBarRef.current = onHoverBar;
+  }, [onHoverBar]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -44,27 +67,40 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
       rightPriceScale: { borderColor: '#262b33' },
       timeScale: { borderColor: '#262b33', timeVisible: true },
       width: containerRef.current.clientWidth,
-      height: 420,
+      height: 560,
     });
 
     const candleSeries = chart.addCandlestickSeries({
-      upColor: '#3987e5',
-      downColor: '#d95926',
+      upColor: '#15803d',
+      downColor: '#2f8fff',
       borderVisible: false,
-      wickUpColor: '#3987e5',
-      wickDownColor: '#d95926',
+      wickUpColor: '#15803d',
+      wickDownColor: '#2f8fff',
+    });
+    candleSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.1, bottom: 0.28 },
+    });
+
+    const volumeSeries = chart.addHistogramSeries({
+      priceFormat: { type: 'volume' },
+      priceScaleId: '',
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.82, bottom: 0 },
     });
 
     const trendSeries = chart.addLineSeries({
       color: '#2f81f7',
-      lineWidth: 2,
+      lineWidth: 3,
       lastValueVisible: false,
       priceLineVisible: false,
     });
 
     const forecastSeries = chart.addLineSeries({
       color: '#e0a52c',
-      lineWidth: 2,
+      lineWidth: 3,
       lineStyle: 2, // dashed
       lastValueVisible: false,
       priceLineVisible: false,
@@ -72,9 +108,30 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
 
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
+    volumeSeriesRef.current = volumeSeries;
     trendSeriesRef.current = trendSeries;
     forecastSeriesRef.current = forecastSeries;
     onChartApi?.(chart);
+
+    const handleCrosshairMove: Parameters<typeof chart.subscribeCrosshairMove>[0] = (param) => {
+      if (!onHoverBarRef.current) return;
+      const bar = param.time ? param.seriesData.get(candleSeries) : undefined;
+      if (!param.time || !bar) {
+        onHoverBarRef.current(null);
+        return;
+      }
+      const ohlc = bar as unknown as { open: number; high: number; low: number; close: number };
+      const volBar = candlesRef.current.find((c) => c.time === (param.time as number));
+      onHoverBarRef.current({
+        time: param.time as number,
+        open: ohlc.open,
+        high: ohlc.high,
+        low: ohlc.low,
+        close: ohlc.close,
+        volume: volBar?.volume ?? 0,
+      });
+    };
+    chart.subscribeCrosshairMove(handleCrosshairMove);
 
     const handleResize = () => {
       if (containerRef.current) chart.applyOptions({ width: containerRef.current.clientWidth });
@@ -83,6 +140,7 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      chart.unsubscribeCrosshairMove(handleCrosshairMove);
       chart.remove();
       smaSeriesRef.current.clear();
     };
@@ -98,6 +156,13 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
         high: c.high,
         low: c.low,
         close: c.close,
+      }))
+    );
+    volumeSeriesRef.current?.setData(
+      candles.map((c) => ({
+        time: c.time as UTCTimestamp,
+        value: c.volume,
+        color: c.close >= c.open ? 'rgba(21, 128, 61, 0.6)' : 'rgba(47, 143, 255, 0.6)',
       }))
     );
     chartRef.current?.timeScale().fitContent();
@@ -137,7 +202,7 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
       if (!map.has(period)) {
         const series = chart.addLineSeries({
           color: SMA_COLORS[period] ?? '#8b939d',
-          lineWidth: 2,
+          lineWidth: BOLD_SMA_PERIODS.has(period) ? 3 : 2,
           lastValueVisible: false,
           priceLineVisible: false,
         });

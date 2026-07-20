@@ -2,23 +2,23 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import type { IChartApi } from 'lightweight-charts';
 import { api, type Candle } from '../api';
-import { Chart } from '../components/Chart';
+import { Chart, type HoverBar } from '../components/Chart';
 import { RsiChart } from '../components/RsiChart';
 import { computeProjection } from '../projection';
 import { formatCurrency, formatSigned, formatPercent, changeClass } from '../format';
 import { SMA_COLORS } from '../sma';
 
-const DATASETS: { label: string; days: number; resolution: 'D' | '60' | '5' }[] = [
-  { label: '1 day (5-min bars)', days: 1, resolution: '5' },
-  { label: '5 days (hourly bars)', days: 5, resolution: '60' },
-  { label: '6 months (daily bars)', days: 180, resolution: 'D' },
-  { label: '1 year (daily bars)', days: 365, resolution: 'D' },
+const DATASETS: { label: string; short: string; days: number; resolution: 'D' | '60' | '5' }[] = [
+  { label: '1 day (5-min bars)', short: '1D', days: 1, resolution: '5' },
+  { label: '5 days (hourly bars)', short: '5D', days: 5, resolution: '60' },
+  { label: '6 months (daily bars)', short: '6M', days: 180, resolution: 'D' },
+  { label: '1 year (daily bars)', short: '1Y', days: 365, resolution: 'D' },
 ];
 
 const SPEEDS = [1, 2, 5, 10];
 const WARMUP = 20; // candles visible before replay starts
 const SESSION_CASH = 100_000;
-const AVAILABLE_SMA_PERIODS = [20, 50];
+const AVAILABLE_SMA_PERIODS = [20, 50, 200, 400];
 
 interface ReplayTrade {
   side: 'BUY' | 'SELL';
@@ -44,6 +44,7 @@ export function ReplayPage() {
   const [showRsi, setShowRsi] = useState(false);
   const [heikinAshi, setHeikinAshi] = useState(false);
   const [mainChartApi, setMainChartApi] = useState<IChartApi | null>(null);
+  const [hoverBar, setHoverBar] = useState<HoverBar | null>(null);
 
   // Sandboxed practice account for this replay session only.
   const [cash, setCash] = useState(SESSION_CASH);
@@ -58,8 +59,21 @@ export function ReplayPage() {
 
   const visible = useMemo(() => allCandles.slice(0, cursor), [allCandles, cursor]);
   const current = visible[visible.length - 1] ?? null;
+  const prevBar = visible[visible.length - 2] ?? null;
   const price = current?.close ?? 0;
+  const tickChange = current && prevBar ? current.close - prevBar.close : 0;
+  const tickChangePercent = current && prevBar && prevBar.close ? (tickChange / prevBar.close) * 100 : 0;
   const finished = allCandles.length > 0 && cursor >= allCandles.length;
+
+  const rangeLow = visible.length ? Math.min(...visible.map((c) => c.low)) : 0;
+  const rangeHigh = visible.length ? Math.max(...visible.map((c) => c.high)) : 0;
+  const rangePct = rangeHigh > rangeLow ? Math.min(100, Math.max(0, ((price - rangeLow) / (rangeHigh - rangeLow)) * 100)) : 50;
+
+  const displayBar: HoverBar | null =
+    hoverBar ??
+    (current
+      ? { time: current.time, open: current.open, high: current.high, low: current.low, close: current.close, volume: current.volume }
+      : null);
 
   const projection = useMemo(() => {
     if (!showProjection || visible.length < 4) return null;
@@ -75,6 +89,7 @@ export function ReplayPage() {
     setTrades([]);
     setCursor(WARMUP);
     setPlaying(false);
+    setHoverBar(null);
   }
 
   async function load(symbolToLoad: string) {
@@ -158,6 +173,44 @@ export function ReplayPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0 }}>Market Replay — {activeSymbol}</h2>
+          {current && (
+            <div style={{ marginTop: 6, display: 'flex', alignItems: 'baseline', gap: 12 }}>
+              <span style={{ fontSize: 36, fontWeight: 800 }}>{formatCurrency(price)}</span>
+              <span className={changeClass(tickChange)} style={{ fontSize: 18, fontWeight: 700 }}>
+                {formatSigned(tickChange)} ({formatPercent(tickChangePercent)})
+              </span>
+            </div>
+          )}
+          {current && rangeHigh > rangeLow && (
+            <div style={{ marginTop: 10, maxWidth: 320 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                Range (revealed so far)
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 12, color: 'var(--text-dim)', fontVariantNumeric: 'tabular-nums' }}>
+                  {formatCurrency(rangeLow)}
+                </span>
+                <div style={{ position: 'relative', flex: 1, height: 4, borderRadius: 2, background: 'var(--border)' }}>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: -4,
+                      left: `${rangePct}%`,
+                      transform: 'translateX(-50%)',
+                      width: 12,
+                      height: 12,
+                      borderRadius: '50%',
+                      background: 'var(--accent)',
+                      border: '2px solid var(--bg-elevated)',
+                    }}
+                  />
+                </div>
+                <span style={{ fontSize: 12, color: 'var(--text-dim)', fontVariantNumeric: 'tabular-nums' }}>
+                  {formatCurrency(rangeHigh)}
+                </span>
+              </div>
+            </div>
+          )}
           <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>
             Practice on past price action, bar by bar, with a fresh {formatCurrency(SESSION_CASH, 0)} practice account per session.
           </div>
@@ -173,18 +226,6 @@ export function ReplayPage() {
             }}
             placeholder="Symbol"
           />
-          <select
-            className="search-input"
-            style={{ width: 190 }}
-            value={datasetIndex}
-            onChange={(e) => setDatasetIndex(Number(e.target.value))}
-          >
-            {DATASETS.map((d, i) => (
-              <option key={d.label} value={i}>
-                {d.label}
-              </option>
-            ))}
-          </select>
           <button
             className="btn btn-secondary"
             onClick={() => navigate(`/replay/${symbolInput.trim().toUpperCase()}`)}
@@ -200,6 +241,13 @@ export function ReplayPage() {
       <div className="grid-2">
         <div>
           <div className="card" style={{ marginBottom: 20 }}>
+            <div className="tabs">
+              {DATASETS.map((d, i) => (
+                <button key={d.label} title={d.label} className={i === datasetIndex ? 'active' : ''} onClick={() => setDatasetIndex(i)}>
+                  {d.short}
+                </button>
+              ))}
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 10 }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <button className="btn btn-secondary" onClick={() => setPlaying(!playing)} disabled={finished || !allCandles.length}>
@@ -253,14 +301,23 @@ export function ReplayPage() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-dim)', marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: 'var(--text-dim)', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
               <span>
                 Bar {Math.max(0, cursor)} / {allCandles.length}
                 {current ? ` — ${formatTime(current.time)}` : ''}
                 {finished ? ' — replay finished' : ''}
               </span>
-              {current && (
-                <span style={{ fontWeight: 700, color: 'var(--text)' }}>{formatCurrency(price)}</span>
+              {displayBar && (
+                <span
+                  style={{ display: 'flex', gap: 12, fontVariantNumeric: 'tabular-nums' }}
+                  className={changeClass(displayBar.close - displayBar.open)}
+                >
+                  <span>O <strong>{formatCurrency(displayBar.open)}</strong></span>
+                  <span>H <strong>{formatCurrency(displayBar.high)}</strong></span>
+                  <span>L <strong>{formatCurrency(displayBar.low)}</strong></span>
+                  <span>C <strong>{formatCurrency(displayBar.close)}</strong></span>
+                  <span style={{ color: 'var(--text-dim)' }}>Vol <strong>{displayBar.volume.toLocaleString()}</strong></span>
+                </span>
               )}
             </div>
             <input
@@ -301,6 +358,7 @@ export function ReplayPage() {
               smaPeriods={smaPeriods}
               heikinAshi={heikinAshi}
               onChartApi={setMainChartApi}
+              onHoverBar={setHoverBar}
             />
           </div>
 
@@ -354,7 +412,7 @@ export function ReplayPage() {
               <label>Quantity (shares)</label>
               <input type="number" min="0" step="1" value={orderQty} onChange={(e) => setOrderQty(e.target.value)} />
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div className="order-actions">
               <button className="btn btn-buy" style={{ flex: 1 }} disabled={!canBuy} onClick={() => trade('BUY')}>
                 Buy @ {current ? formatCurrency(price) : '—'}
               </button>

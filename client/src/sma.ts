@@ -22,4 +22,5 @@ export const SMA_COLORS: Record<number, string> = {
   50: '#f0883e',
   100: '#22d3ee',
   200: '#ec4899',
+  400: '#eab308',
 };
