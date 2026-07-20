@@ -31,9 +31,29 @@ interface ChartProps {
   heikinAshi?: boolean;
   onChartApi?: (chart: IChartApi) => void;
   onHoverBar?: (bar: HoverBar | null) => void;
+  /** When set, a newly-appended bar animates in over this many ms (open
+   *  settling toward its final OHLC) instead of snapping in instantly —
+   *  the "buyers vs. sellers" live-forming candle feel. */
+  tickAnimationMs?: number;
 }
 
-export function Chart({ candles, projection, showProjection, smaPeriods, heikinAshi, onChartApi, onHoverBar }: ChartProps) {
+interface OhlcBar {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+export function Chart({
+  candles,
+  projection,
+  showProjection,
+  smaPeriods,
+  heikinAshi,
+  onChartApi,
+  onHoverBar,
+  tickAnimationMs,
+}: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -51,6 +71,73 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
     heikinAshi: false,
   });
   const haStateRef = useRef<{ open: number; close: number } | null>(null);
+  const animatingBarRef = useRef<{ time: UTCTimestamp; final: OhlcBar; volume: number; volumeColor: string } | null>(null);
+  const animationHandleRef = useRef<number | null>(null);
+  const tickAnimationMsRef = useRef(tickAnimationMs);
+
+  useEffect(() => {
+    tickAnimationMsRef.current = tickAnimationMs;
+  }, [tickAnimationMs]);
+
+  // Snap any in-flight bar animation straight to its final values — called
+  // when a new tick/reset arrives before the previous bar finished forming.
+  function stopBarAnimation() {
+    if (animationHandleRef.current !== null) {
+      cancelAnimationFrame(animationHandleRef.current);
+      animationHandleRef.current = null;
+    }
+    const pending = animatingBarRef.current;
+    if (pending) {
+      candleSeriesRef.current?.update({ time: pending.time, ...pending.final });
+      volumeSeriesRef.current?.update({ time: pending.time, value: pending.volume, color: pending.volumeColor });
+      animatingBarRef.current = null;
+    }
+  }
+
+  // Animate a newly-appended bar growing from its open toward its final
+  // OHLC — the wick probes beyond its settled range before pulling back,
+  // like a live print forming as buyers and sellers trade the bar out.
+  function animateBarIn(time: UTCTimestamp, final: OhlcBar, volume: number, volumeColor: string) {
+    const candleSeries = candleSeriesRef.current;
+    const volumeSeries = volumeSeriesRef.current;
+    const duration = tickAnimationMsRef.current;
+    if (!candleSeries || !duration || duration <= 0) {
+      candleSeries?.update({ time, ...final });
+      volumeSeries?.update({ time, value: volume, color: volumeColor });
+      return;
+    }
+
+    animatingBarRef.current = { time, final, volume, volumeColor };
+    const start = performance.now();
+    const rangeUp = Math.max(final.high - final.open, 0);
+    const rangeDown = Math.max(final.open - final.low, 0);
+
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      if (t >= 1) {
+        candleSeries.update({ time, ...final });
+        volumeSeries?.update({ time, value: volume, color: volumeColor });
+        animatingBarRef.current = null;
+        animationHandleRef.current = null;
+        return;
+      }
+      const eased = 1 - Math.pow(1 - t, 3);
+      const overshoot = Math.sin(Math.PI * Math.min(1, t * 1.3)) * 0.35 * (1 - eased);
+      const close = final.open + (final.close - final.open) * eased;
+      const high = final.open + rangeUp * Math.min(1, eased + overshoot);
+      const low = final.open - rangeDown * Math.min(1, eased + overshoot);
+      candleSeries.update({
+        time,
+        open: final.open,
+        high: Math.max(high, close, final.open),
+        low: Math.min(low, close, final.open),
+        close,
+      });
+      volumeSeries?.update({ time, value: volume * eased, color: volumeColor });
+      animationHandleRef.current = requestAnimationFrame(step);
+    };
+    animationHandleRef.current = requestAnimationFrame(step);
+  }
 
   useEffect(() => {
     candlesRef.current = candles;
@@ -168,6 +255,7 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
     return () => {
       window.removeEventListener('resize', handleResize);
       chart.unsubscribeCrosshairMove(handleCrosshairMove);
+      if (animationHandleRef.current !== null) cancelAnimationFrame(animationHandleRef.current);
       chart.remove();
       smaSeriesRef.current.clear();
     };
@@ -177,6 +265,10 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
     const candleSeries = candleSeriesRef.current;
     const volumeSeries = volumeSeriesRef.current;
     if (!candleSeries) return;
+
+    // A new bar is arriving (or a reset is happening) — settle whatever the
+    // previous bar's animation was mid-way through first.
+    stopBarAnimation();
 
     const prev = prevCandlesInfoRef.current;
     const isSimpleAppend =
@@ -191,7 +283,7 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
       // Tick-by-tick playback: append just the new bar instead of re-rendering
       // the whole series, so the timescale doesn't jump/re-fit every tick.
       const raw = candles[candles.length - 1];
-      let bar: { open: number; high: number; low: number; close: number };
+      let bar: OhlcBar;
       if (heikinAshi && haStateRef.current) {
         const haClose = (raw.open + raw.high + raw.low + raw.close) / 4;
         const haOpen = (haStateRef.current.open + haStateRef.current.close) / 2;
@@ -200,8 +292,7 @@ export function Chart({ candles, projection, showProjection, smaPeriods, heikinA
       } else {
         bar = { open: raw.open, high: raw.high, low: raw.low, close: raw.close };
       }
-      candleSeries.update({ time: raw.time as UTCTimestamp, ...bar });
-      volumeSeries?.update({ time: raw.time as UTCTimestamp, value: raw.volume, color: volumeColor(raw) });
+      animateBarIn(raw.time as UTCTimestamp, bar, raw.volume, volumeColor(raw));
     } else {
       const displayCandles = heikinAshi ? toHeikinAshi(candles) : candles;
       candleSeries.setData(

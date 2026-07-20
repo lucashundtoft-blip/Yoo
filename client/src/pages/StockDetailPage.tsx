@@ -25,8 +25,8 @@ export function StockDetailPage() {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [candles, setCandles] = useState<Candle[]>([]);
   const [projection, setProjection] = useState<Projection | null>(null);
-  const [showProjection, setShowProjection] = useState(true);
-  const [smaPeriods, setSmaPeriods] = useState<number[]>([20]);
+  const [showProjection, setShowProjection] = useState(false);
+  const [smaPeriods, setSmaPeriods] = useState<number[]>([]);
   const [showRsi, setShowRsi] = useState(false);
   const [heikinAshi, setHeikinAshi] = useState(false);
   const [mainChartApi, setMainChartApi] = useState<IChartApi | null>(null);
