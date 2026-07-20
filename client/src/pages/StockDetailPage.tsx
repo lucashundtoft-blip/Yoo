@@ -124,7 +124,7 @@ export function StockDetailPage() {
       <div className="grid-2">
         <div>
           <div className="card" style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 10 }}>
               <div className="tabs">
                 {RANGES.map((r, i) => (
                   <button key={r.label} className={i === rangeIndex ? 'active' : ''} onClick={() => setRangeIndex(i)}>
@@ -132,7 +132,7 @@ export function StockDetailPage() {
                   </button>
                 ))}
               </div>
-              <div style={{ display: 'flex', gap: 14 }}>
+              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                 {AVAILABLE_SMA_PERIODS.map((period) => (
                   <label
                     key={period}
