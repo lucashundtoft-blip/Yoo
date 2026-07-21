@@ -12,6 +12,7 @@ scripts/market_alerts.py    # Yahoo Finance watchlist alert scanner
 watchlist.json              # example watchlist config for market_alerts.py
 requirements.txt            # yfinance
 web/bar_replay_trainer.html # standalone mobile-style bar replay trading trainer
+scripts/replay_server.py    # optional local backend: live Yahoo Finance data for the trainer
 ```
 
 There's no `README.md` or `.gitignore`. Do not assume more project structure
@@ -58,11 +59,27 @@ stop/target boxes), SMA/RSI/Heikin-Ashi toggles, and touch gestures
 (pan/pinch/double-tap). No build step, no dependencies — open the file
 directly in a browser.
 
-**Frozen dataset, not live data:** price history for ~35 tickers/futures
-(daily bars + intraday) is baked into a `DATA` JS object in the file itself.
-Replays are always drawn from this fixed historical set — it does not fetch
-live quotes. Regenerating/extending the dataset means editing that JS
-object directly; there's no separate data pipeline for it in this repo.
+**Baked-in data + optional live fetch:** price history for ~35
+tickers/futures (daily + 5m + 1m bars) is baked into a `DATA` JS object in
+the file itself, and the trainer works fully offline against that frozen
+set. Tap the 📡 button to fetch a fresh ticker live instead — it prompts
+for a symbol, calls `/api/bars?symbol=...` on the companion
+`scripts/replay_server.py`, and adds the result to the replay pool (same
+`{d, f, m}` shape as the baked-in data). Browsers can't call Yahoo Finance
+directly (no CORS on yfinance's endpoints), so the live path only works
+when that local server is running:
+
+```bash
+pip install -r requirements.txt
+python -m scripts.replay_server
+# open http://localhost:8000/bar_replay_trainer.html
+```
+
+Verified end-to-end with a mocked `yfinance` response (this sandbox's
+network policy blocks Yahoo's domains, same as the DOJ/Yahoo restrictions
+noted elsewhere in this file) — confirmed the button prompts, fetches,
+and redraws the chart with the new ticker. Re-verify against real Yahoo
+data from an unrestricted network before relying on it.
 
 ## What `scripts/market_alerts.py` does
 
