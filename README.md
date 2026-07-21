@@ -1,88 +1,95 @@
-# YooTrade
+# Epstein Files research tool
 
-Practice trading stocks 24/7 with fake money — Webull-style watchlist, charts,
-and order execution, plus a trend-projection overlay on every chart.
+A personal research/study tool for the DOJ's public **Epstein Library** —
+released under the *Epstein Files Transparency Act* (signed Nov 19, 2025),
+which put out 3.5M+ pages, 180,000+ images, and 2,000+ videos at
+`justice.gov/epstein`. This app:
 
-## Stack
+- **Fetches** a curated slice of that public release (by name/keyword search,
+  or by dataset) rather than trying to pull all 3.5M pages.
+- **Indexes** document text (with OCR fallback for scanned pages) into a
+  full-text search index, so you can pull up everything mentioning a given
+  name (e.g. "trump").
+- **Sequences videos** into a playlist player so you can watch them back to
+  back for study, plus an optional script to merge them into one file.
 
-- **server/** — Express + TypeScript + SQLite (`better-sqlite3`). Single-user
-  paper-trading account, starts with $100,000 fake cash.
-- **client/** — React + Vite + TypeScript, charts via `lightweight-charts`.
+Everything here operates on **public government records**. Nothing is
+bundled — you populate `library/` yourself by running the fetcher.
 
-## Market data
+## Known limitation: network access
 
-By default the app uses a built-in **simulated data provider** — deterministic
-per-symbol random walks, so it works fully offline with no API key and never
-stops "trading," even when real markets are closed.
+This was built in a sandboxed environment whose egress policy blocks
+`justice.gov` entirely (only GitHub, package registries, and a couple of
+other domains are reachable). That means:
 
-To use real prices, get a free API key from [Finnhub](https://finnhub.io/register)
-and set it before starting the server:
+- The fetcher code (`fetcher/`) is written from public reporting on the
+  DOJ site's structure, **not verified against the live site**.
+- Before any bulk run, run `python -m fetcher.probe` from a network that can
+  actually reach `justice.gov`, and fix up the selectors in
+  `fetcher/crawl_datasets.py` / `fetcher/search_fetch.py` if the real markup
+  differs (they use a generic "any link ending in `.pdf`/`.mp4`/etc."
+  heuristic, which should be fairly resilient, but the DOJ search results
+  may also be JS-rendered — if `probe` finds no links, you'll need a
+  headless-browser fetch instead of a plain GET).
+- The DOJ site reportedly has an age-gate / access-verification interstitial
+  in front of some content; this isn't handled yet and may need a manual
+  cookie or confirmation step once you can see the real flow.
 
-```bash
-export FINNHUB_API_KEY=your_key_here
-```
+Everything else (DB, indexing, search, video player, concat script) was
+built and tested end-to-end locally with synthetic sample data.
 
-If the key is missing, invalid, rate-limited, or the network is unreachable,
-the app automatically falls back to simulated data per-request so it keeps
-working either way.
-
-## Indicators
-
-- **Simple Moving Average (SMA)** — toggle a 20- or 50-period SMA line on any
-  chart (computed client-side from the loaded candles).
-- **RSI (14)** — Wilder-smoothed Relative Strength Index in its own pane below
-  the price chart, with overbought (70) / oversold (30) reference lines. Its
-  time scale stays synced with the main chart when you zoom or pan.
-- **Trend projection** — a least-squares trendline fitted over the recent
-  lookback window (solid blue), extended forward as a dashed forecast line
-  (orange). This is classic technical-analysis-style extrapolation — "if the
-  recent trend continues" — not a statistical prediction of price reversals.
-
-All indicators are toggled from checkboxes above the chart.
-
-## Market Replay
-
-The **Replay** page (or the ▶ Replay button on any stock page) plays back
-historical candles bar-by-bar so you can practice trading past price action
-as if it were live — Webull/TradingView bar-replay style. Play/pause, step,
-scrub, and speed controls (1x–10x); each session gets its own fresh $100,000
-practice account with a live P&L scoreboard and trade log, kept separate
-from your main paper portfolio. Indicators and the trend projection are
-computed only from candles revealed so far — no peeking at the future.
-
-## Running locally
+## Setup
 
 ```bash
-npm install          # installs both workspaces
-npm run dev:server   # starts the API on :4000
-npm run dev:client   # starts the Vite dev server on :5173 (proxies /api to :4000)
+pip install -r requirements.txt
 ```
 
-Open http://localhost:5173.
+For OCR on scanned documents you also need the `tesseract` binary
+(`apt install tesseract-ocr`) and, for scanned PDFs specifically, `poppler`
+(`apt install poppler-utils`) so `pdf2image` can rasterize pages.
 
-## Building for production
+## Usage
 
 ```bash
-npm run build   # builds server + client
-npm start       # serves everything (API + web app) from one process
+# 1. Sanity-check the DOJ site structure before a bulk run
+python -m fetcher.probe
+
+# 2. Pull a curated set - e.g. everything DOJ's own search surfaces for "trump"
+python -m fetcher.search_fetch --query trump --limit 50
+
+# (alternative: crawl specific "Data Set N" pages instead of a name search)
+python -m fetcher.crawl_datasets --dataset "Data Set 12" --limit 50
+
+# 3. Build the search index over whatever landed in library/
+python -m indexer.build_index
+
+# 4. Run the app
+python app/server.py
+# -> http://127.0.0.1:5000
+#    /search    full-text search over document text
+#    /documents browse everything indexed
+#    /videos    sequential playlist player (auto-advances, click to jump)
+
+# 5. Optional: merge all videos into a single file instead of using the
+#    web playlist (requires the `ffmpeg` binary on PATH)
+python -m scripts.concat_videos --out data/compilation.mp4
 ```
 
-In production the Express server also serves the built client, so a single
-process on one port runs the whole app (set `PORT` to override the default
-`4000`).
+## How it's organized
 
-## Deploying to Render (free hosting)
-
-The repo includes a `render.yaml` blueprint. To get a public URL:
-
-1. Go to [render.com](https://render.com) and sign up (choose **Sign in with
-   GitHub**).
-2. Click **New +** → **Blueprint**, and select the `Yoo` repository.
-3. Click **Deploy** — Render builds and starts the app automatically, and
-   gives you a URL like `https://yootrade.onrender.com` that works from any
-   phone or computer.
-
-Notes for the free tier: the app sleeps after ~15 minutes of inactivity (the
-first visit after that takes up to a minute to wake), and the SQLite database
-is reset whenever the service restarts or redeploys — fine for practice, but
-don't expect your paper portfolio to last forever.
+```
+config.py              paths + DOJ URLs
+fetcher/
+  doj_client.py         rate-limited requests session
+  probe.py               run first - dumps page structure for a live sanity check
+  search_fetch.py        download items matching a name/keyword search
+  crawl_datasets.py      download items from specific "Data Set N" pages
+indexer/
+  db.py                  SQLite schema + FTS5 full-text search
+  extract_text.py        PDF text extraction + OCR fallback
+  build_index.py         walk library/, populate the DB and search index
+app/
+  server.py              Flask app: search, document list, video player
+scripts/
+  concat_videos.py       ffmpeg concat of all indexed videos into one file
+```

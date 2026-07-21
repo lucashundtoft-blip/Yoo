@@ -1,11 +1,14 @@
-node_modules/
-dist/
-build/
-*.log
-.env
-.env.local
-server/data/*.db
-server/data/*.db-journal
-server/data/*.db-shm
-server/data/*.db-wal
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Downloaded/generated content - large, and shouldn't live in git
+library/documents/*
+library/videos/*
+!library/documents/.gitkeep
+!library/videos/.gitkeep
+data/*.sqlite3
+data/compilation.mp4
+
 .DS_Store
