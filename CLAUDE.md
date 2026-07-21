@@ -7,10 +7,11 @@ Guidance for Claude Code (and other AI assistants) working in this repository.
 The working tree is small:
 
 ```
-scripts/concat_videos.py   # broken, see "Known breakage" below
-scripts/market_alerts.py   # Yahoo Finance watchlist alert scanner
-watchlist.json             # example watchlist config for market_alerts.py
-requirements.txt           # yfinance
+scripts/concat_videos.py    # broken, see "Known breakage" below
+scripts/market_alerts.py    # Yahoo Finance watchlist alert scanner
+watchlist.json              # example watchlist config for market_alerts.py
+requirements.txt            # yfinance
+web/bar_replay_trainer.html # standalone mobile-style bar replay trading trainer
 ```
 
 There's no `README.md` or `.gitignore`. Do not assume more project structure
@@ -45,6 +46,23 @@ gap rather than silently patching around it; the right fix depends on
 what the user actually wants the repo to become next (rebuild a minimal
 `config.py`/`indexer.db`, rewrite the script to take a plain directory of
 video files as input, etc.) — ask rather than guessing.
+
+## What `web/bar_replay_trainer.html` is
+
+A self-contained, single-file mobile-style "bar replay" trading practice
+tool — pulled in from a previously-published Claude Artifact (built in an
+earlier, separate session, not from this repo's history). Full-bleed canvas
+candlestick chart with floating Webull-style overlay controls (timeframe
+pills, ticker picker, price header, long/short trade buttons, draggable
+stop/target boxes), SMA/RSI/Heikin-Ashi toggles, and touch gestures
+(pan/pinch/double-tap). No build step, no dependencies — open the file
+directly in a browser.
+
+**Frozen dataset, not live data:** price history for ~35 tickers/futures
+(daily bars + intraday) is baked into a `DATA` JS object in the file itself.
+Replays are always drawn from this fixed historical set — it does not fetch
+live quotes. Regenerating/extending the dataset means editing that JS
+object directly; there's no separate data pipeline for it in this repo.
 
 ## What `scripts/market_alerts.py` does
 
