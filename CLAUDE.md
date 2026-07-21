@@ -4,16 +4,19 @@ Guidance for Claude Code (and other AI assistants) working in this repository.
 
 ## Current state of the repo
 
-This repository is **almost empty**. The entire working tree is:
+The working tree is small:
 
 ```
-scripts/concat_videos.py
+scripts/concat_videos.py   # broken, see "Known breakage" below
+scripts/market_alerts.py   # Yahoo Finance watchlist alert scanner
+watchlist.json             # example watchlist config for market_alerts.py
+requirements.txt           # yfinance
 ```
 
-That's it — no `README.md`, no `requirements.txt`, no `.gitignore`, no package
-directories. Do not assume any other project structure exists without
-checking `ls`/`git ls-tree` first; it's easy to be misled by the git history
-described below into thinking there's more here than there is.
+There's no `README.md` or `.gitignore`. Do not assume more project structure
+exists than this without checking `ls`/`git ls-tree` first; it's easy to be
+misled by the git history described below into thinking there's more here
+than there is.
 
 ### Why it's like this (history)
 
@@ -42,6 +45,25 @@ gap rather than silently patching around it; the right fix depends on
 what the user actually wants the repo to become next (rebuild a minimal
 `config.py`/`indexer.db`, rewrite the script to take a plain directory of
 video files as input, etc.) — ask rather than guessing.
+
+## What `scripts/market_alerts.py` does
+
+Console-based market scanner: reads `watchlist.json` (ticker → optional
+`above`/`below` price thresholds and/or `pct_move` day-change % threshold),
+fetches each ticker's current price via `yfinance`, and prints an `ALERT:`
+line to stdout for anything that trips a threshold. No notification
+channel (email/Slack/etc.) is wired up — it's meant to be run on a schedule
+(e.g. cron) with output captured/piped by whatever the user wants.
+
+Run: `python -m scripts.market_alerts` (from repo root, after
+`pip install -r requirements.txt`).
+
+**Not verified against live Yahoo Finance from this sandbox** — this
+environment's egress policy blocks Yahoo's domains (`fc.yahoo.com` etc.,
+403 at the proxy), the same restriction that blocked `justice.gov` for the
+earlier deleted project. The alert-threshold logic was verified locally
+with mocked `yf.Ticker` responses instead; re-verify the real fetch path
+from a network that can reach Yahoo Finance before relying on it.
 
 ## What `scripts/concat_videos.py` does (as designed)
 

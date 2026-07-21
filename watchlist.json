@@ -1,0 +1,5 @@
+{
+  "AAPL": {"below": null, "above": null, "pct_move": 3.0},
+  "TSLA": {"below": null, "above": null, "pct_move": 5.0},
+  "SPY":  {"below": null, "above": null, "pct_move": 2.0}
+}
