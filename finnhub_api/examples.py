@@ -1,11 +1,11 @@
 """Example usage of the Finnhub API skill."""
 
-from client import FinnhubClient
+from .client import FinnhubClient
 
 
 def example_get_quote():
     """Example: Get a single stock quote."""
-    api_key = "your_api_key_here"
+    api_key = "d9ihhahr01qs513m5gbgd9ihhahr01qs513m5gc0"
     client = FinnhubClient(api_key)
 
     try:
@@ -20,7 +20,7 @@ def example_get_quote():
 
 def example_get_multiple_quotes():
     """Example: Get quotes for multiple stocks."""
-    api_key = "your_api_key_here"
+    api_key = "d9ihhahr01qs513m5gbgd9ihhahr01qs513m5gc0"
     client = FinnhubClient(api_key)
 
     try:
@@ -38,7 +38,7 @@ def example_get_multiple_quotes():
 
 def example_get_company_profile():
     """Example: Get company profile information."""
-    api_key = "your_api_key_here"
+    api_key = "d9ihhahr01qs513m5gbgd9ihhahr01qs513m5gc0"
     client = FinnhubClient(api_key)
 
     try:
@@ -55,7 +55,7 @@ def example_get_company_profile():
 
 def example_get_news():
     """Example: Get company news."""
-    api_key = "your_api_key_here"
+    api_key = "d9ihhahr01qs513m5gbgd9ihhahr01qs513m5gc0"
     client = FinnhubClient(api_key)
 
     try:
@@ -73,7 +73,7 @@ def example_get_news():
 
 def example_search_stocks():
     """Example: Search for stocks."""
-    api_key = "your_api_key_here"
+    api_key = "d9ihhahr01qs513m5gbgd9ihhahr01qs513m5gc0"
     client = FinnhubClient(api_key)
 
     try:
@@ -88,7 +88,7 @@ def example_search_stocks():
 
 def example_context_manager():
     """Example: Using context manager for automatic cleanup."""
-    api_key = "your_api_key_here"
+    api_key = "d9ihhahr01qs513m5gbgd9ihhahr01qs513m5gc0"
 
     with FinnhubClient(api_key) as client:
         quote = client.get_quote("AAPL")
@@ -99,13 +99,40 @@ def example_context_manager():
 if __name__ == "__main__":
     print("Finnhub API Skill Examples")
     print("=" * 60)
-    print("\nNote: Replace 'your_api_key_here' with your actual Finnhub API key")
-    print("Get a free API key at: https://finnhub.io\n")
+    print()
 
-    # Uncomment to run examples:
-    # example_get_quote()
-    # example_get_multiple_quotes()
-    # example_get_company_profile()
-    # example_get_news()
-    # example_search_stocks()
-    # example_context_manager()
+    try:
+        print("\n--- Example 1: Get Single Quote ---")
+        example_get_quote()
+    except Exception as e:
+        print(f"Error: {e}")
+
+    try:
+        print("\n--- Example 2: Get Multiple Quotes ---")
+        example_get_multiple_quotes()
+    except Exception as e:
+        print(f"Error: {e}")
+
+    try:
+        print("\n--- Example 3: Get Company Profile ---")
+        example_get_company_profile()
+    except Exception as e:
+        print(f"Error: {e}")
+
+    try:
+        print("\n--- Example 4: Get News ---")
+        example_get_news()
+    except Exception as e:
+        print(f"Error: {e}")
+
+    try:
+        print("\n--- Example 5: Search Stocks ---")
+        example_search_stocks()
+    except Exception as e:
+        print(f"Error: {e}")
+
+    try:
+        print("\n--- Example 6: Context Manager ---")
+        example_context_manager()
+    except Exception as e:
+        print(f"Error: {e}")
