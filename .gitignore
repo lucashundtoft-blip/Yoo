@@ -42,3 +42,14 @@ htmlcov/
 # Environment variables
 .env
 .env.local
+
+# Node
+node_modules/
+*.log
+.DS_Store
+
+# App data
+server/data/*.db
+server/data/*.db-journal
+server/data/*.db-shm
+server/data/*.db-wal
