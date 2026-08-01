@@ -204,7 +204,8 @@ export function TrendGamePage() {
           <h2 style={{ margin: 0 }}>Trend Projection Practice — {activeSymbol}</h2>
           <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>
             Set your target for the next {dataset.horizon} bars, lock it in, then watch price play out.{' '}
-            <Link to={`/replay/${activeSymbol}`}>Switch to trading replay →</Link>
+            <Link to={`/replay/${activeSymbol}`}>Switch to trading replay →</Link>{' '}
+            <Link to={`/replay/${activeSymbol}/challenge`}>🏆 Beat the market →</Link>
           </div>
         </div>
         <div className="tabs" style={{ marginBottom: 0 }}>

@@ -66,6 +66,37 @@ export interface Order {
   createdAt: string;
 }
 
+export interface ChallengeRun {
+  id: number;
+  symbol: string;
+  datasetLabel: string;
+  bars: number;
+  yourReturnPct: number;
+  buyHoldReturnPct: number;
+  alphaPct: number;
+  tradeCount: number;
+  score: number;
+  createdAt: string;
+}
+
+export interface ChallengeStats {
+  totalRuns: number;
+  wins: number;
+  bestScore: number;
+  bestAlphaPct: number;
+}
+
+export interface ChallengeRunInput {
+  symbol: string;
+  datasetLabel: string;
+  bars: number;
+  yourReturnPct: number;
+  buyHoldReturnPct: number;
+  alphaPct: number;
+  tradeCount: number;
+  score: number;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -105,4 +136,8 @@ export const api = {
   placeOrder: (symbol: string, side: 'BUY' | 'SELL', quantity: number) =>
     request<Order>('/orders', { method: 'POST', body: JSON.stringify({ symbol, side, quantity }) }),
   resetAccount: () => request<{ ok: boolean }>('/account/reset', { method: 'POST' }),
+  getChallenges: (limit = 20) =>
+    request<{ runs: ChallengeRun[]; stats: ChallengeStats }>(`/challenges?limit=${limit}`),
+  recordChallenge: (input: ChallengeRunInput) =>
+    request<ChallengeRun>('/challenges', { method: 'POST', body: JSON.stringify(input) }),
 };

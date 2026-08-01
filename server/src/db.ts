@@ -39,6 +39,19 @@ db.exec(`
     name TEXT,
     added_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS challenge_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    dataset_label TEXT NOT NULL,
+    bars INTEGER NOT NULL,
+    your_return_pct REAL NOT NULL,
+    buy_hold_return_pct REAL NOT NULL,
+    alpha_pct REAL NOT NULL,
+    trade_count INTEGER NOT NULL,
+    score INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+  );
 `);
 
 const existingAccount = db.prepare('SELECT id FROM account WHERE id = 1').get();

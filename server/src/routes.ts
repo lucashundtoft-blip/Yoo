@@ -3,6 +3,7 @@ import { marketData, type Resolution } from './marketData/index.js';
 import { computeProjection } from './projection.js';
 import { buy, sell, getCash, getPositions, getOrders, resetAccount, TradingError } from './trading.js';
 import { getWatchlist, addToWatchlist, removeFromWatchlist } from './watchlist.js';
+import { recordChallengeRun, listChallengeRuns, getChallengeStats } from './challenges.js';
 
 export const router = Router();
 
@@ -132,4 +133,29 @@ router.post('/orders', async (req, res, next) => {
 router.post('/account/reset', (_req, res) => {
   resetAccount();
   res.json({ ok: true });
+});
+
+router.get('/challenges', (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 20, 100);
+  res.json({ runs: listChallengeRuns(limit), stats: getChallengeStats() });
+});
+
+router.post('/challenges', (req, res) => {
+  const symbol = String(req.body?.symbol ?? '').trim();
+  const datasetLabel = String(req.body?.datasetLabel ?? '').trim();
+  const bars = Number(req.body?.bars);
+  if (!symbol) return res.status(400).json({ error: 'symbol is required' });
+  if (!datasetLabel) return res.status(400).json({ error: 'datasetLabel is required' });
+  if (!Number.isFinite(bars) || bars <= 0) return res.status(400).json({ error: 'bars must be a positive number' });
+  const run = recordChallengeRun({
+    symbol,
+    datasetLabel,
+    bars,
+    yourReturnPct: Number(req.body?.yourReturnPct) || 0,
+    buyHoldReturnPct: Number(req.body?.buyHoldReturnPct) || 0,
+    alphaPct: Number(req.body?.alphaPct) || 0,
+    tradeCount: Number(req.body?.tradeCount) || 0,
+    score: Math.round(Number(req.body?.score) || 0),
+  });
+  res.json(run);
 });

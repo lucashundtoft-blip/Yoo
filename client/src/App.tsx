@@ -6,6 +6,7 @@ import { PortfolioPage } from './pages/PortfolioPage';
 import { OrdersPage } from './pages/OrdersPage';
 import { ReplayPage } from './pages/ReplayPage';
 import { TrendGamePage } from './pages/TrendGamePage';
+import { ChallengePage } from './pages/ChallengePage';
 import { FuturesHeatmapPage } from './pages/FuturesHeatmapPage';
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
             <Route path="/replay" element={<ReplayPage />} />
             <Route path="/replay/:symbol" element={<ReplayPage />} />
             <Route path="/replay/:symbol/game" element={<TrendGamePage />} />
+            <Route path="/replay/:symbol/challenge" element={<ChallengePage />} />
             <Route path="/futures" element={<FuturesHeatmapPage />} />
           </Routes>
         </main>

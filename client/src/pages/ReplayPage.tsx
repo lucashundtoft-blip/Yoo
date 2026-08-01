@@ -257,7 +257,8 @@ export function ReplayPage() {
           )}
           <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>
             Practice on past price action, bar by bar, with a fresh {formatCurrency(SESSION_CASH, 0)} practice account per session.{' '}
-            <Link to={`/replay/${activeSymbol}/game`}>🎯 Practice trend projection →</Link>
+            <Link to={`/replay/${activeSymbol}/game`}>🎯 Practice trend projection →</Link>{' '}
+            <Link to={`/replay/${activeSymbol}/challenge`}>🏆 Beat the market →</Link>
           </div>
         </div>
         <div>
