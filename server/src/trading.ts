@@ -115,6 +115,118 @@ export function resetAccount(): void {
     db.prepare('UPDATE account SET cash = ? WHERE id = 1').run(STARTING_BALANCE);
     db.prepare('DELETE FROM positions').run();
     db.prepare('DELETE FROM orders').run();
+    db.prepare('DELETE FROM bracket_orders').run();
   });
   tx();
+}
+
+export interface BracketOrder {
+  id: number;
+  symbol: string;
+  quantity: number;
+  takeProfitPrice: number | null;
+  stopLossPrice: number | null;
+  status: 'ACTIVE' | 'FILLED' | 'CANCELLED';
+  createdAt: string;
+  filledAt: string | null;
+  filledPrice: number | null;
+  filledLeg: 'TP' | 'SL' | null;
+}
+
+/** Attaches a take-profit / stop-loss bracket to shares just bought. Doesn't
+ * place a real order with a broker -- a background check (see checkBrackets)
+ * polls quotes and sells automatically once either level is touched. */
+export function createBracket(
+  symbol: string,
+  quantity: number,
+  takeProfitPrice: number | null,
+  stopLossPrice: number | null
+): BracketOrder {
+  symbol = symbol.toUpperCase();
+  if (quantity <= 0) throw new TradingError('Quantity must be positive');
+  if (takeProfitPrice == null && stopLossPrice == null) {
+    throw new TradingError('Provide at least one of takeProfitPrice or stopLossPrice');
+  }
+  const createdAt = new Date().toISOString();
+  const info = db
+    .prepare(
+      `INSERT INTO bracket_orders (symbol, quantity, take_profit_price, stop_loss_price, status, created_at)
+       VALUES (?, ?, ?, ?, 'ACTIVE', ?)`
+    )
+    .run(symbol, quantity, takeProfitPrice, stopLossPrice, createdAt);
+  return {
+    id: Number(info.lastInsertRowid),
+    symbol,
+    quantity,
+    takeProfitPrice,
+    stopLossPrice,
+    status: 'ACTIVE',
+    createdAt,
+    filledAt: null,
+    filledPrice: null,
+    filledLeg: null,
+  };
+}
+
+function rowToBracket(row: any): BracketOrder {
+  return {
+    id: row.id,
+    symbol: row.symbol,
+    quantity: row.quantity,
+    takeProfitPrice: row.take_profit_price,
+    stopLossPrice: row.stop_loss_price,
+    status: row.status,
+    createdAt: row.created_at,
+    filledAt: row.filled_at,
+    filledPrice: row.filled_price,
+    filledLeg: row.filled_leg,
+  };
+}
+
+export function getActiveBrackets(symbol?: string): BracketOrder[] {
+  const rows = symbol
+    ? db
+        .prepare("SELECT * FROM bracket_orders WHERE status = 'ACTIVE' AND symbol = ? ORDER BY id DESC")
+        .all(symbol.toUpperCase())
+    : db.prepare("SELECT * FROM bracket_orders WHERE status = 'ACTIVE' ORDER BY id DESC").all();
+  return rows.map(rowToBracket);
+}
+
+export function cancelBracket(id: number): void {
+  const info = db
+    .prepare("UPDATE bracket_orders SET status = 'CANCELLED' WHERE id = ? AND status = 'ACTIVE'")
+    .run(id);
+  if (info.changes === 0) throw new TradingError('No active bracket order with that id');
+}
+
+/** Checks every active bracket against a live price and sells if either the
+ * take-profit or stop-loss level has been touched. Skips (rather than
+ * throws) a bracket whose shares were already sold some other way. */
+export async function checkBrackets(getPrice: (symbol: string) => Promise<number>): Promise<void> {
+  for (const bracket of getActiveBrackets()) {
+    let price: number;
+    try {
+      price = await getPrice(bracket.symbol);
+    } catch {
+      continue;
+    }
+    if (!price) continue;
+
+    let leg: 'TP' | 'SL' | null = null;
+    if (bracket.takeProfitPrice != null && price >= bracket.takeProfitPrice) leg = 'TP';
+    else if (bracket.stopLossPrice != null && price <= bracket.stopLossPrice) leg = 'SL';
+    if (!leg) continue;
+
+    try {
+      sell(bracket.symbol, bracket.quantity, price);
+      db.prepare(
+        "UPDATE bracket_orders SET status = 'FILLED', filled_at = ?, filled_price = ?, filled_leg = ? WHERE id = ?"
+      ).run(new Date().toISOString(), price, leg, bracket.id);
+    } catch (err) {
+      if (err instanceof TradingError) {
+        // Shares for this bracket are gone (sold manually, etc.) -- drop it.
+        db.prepare("UPDATE bracket_orders SET status = 'CANCELLED' WHERE id = ?").run(bracket.id);
+      }
+    }
+  }
 }

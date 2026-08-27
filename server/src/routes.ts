@@ -1,7 +1,18 @@
 import { Router } from 'express';
 import { marketData, type Resolution } from './marketData/index.js';
 import { computeProjection } from './projection.js';
-import { buy, sell, getCash, getPositions, getOrders, resetAccount, TradingError } from './trading.js';
+import {
+  buy,
+  sell,
+  getCash,
+  getPositions,
+  getOrders,
+  resetAccount,
+  createBracket,
+  getActiveBrackets,
+  cancelBracket,
+  TradingError,
+} from './trading.js';
 import { getWatchlist, addToWatchlist, removeFromWatchlist } from './watchlist.js';
 
 export const router = Router();
@@ -120,9 +131,47 @@ router.post('/orders', async (req, res, next) => {
     if (!Number.isFinite(quantity) || quantity <= 0) {
       return res.status(400).json({ error: 'quantity must be a positive number' });
     }
+
+    const takeProfitPrice = req.body?.takeProfitPrice != null ? Number(req.body.takeProfitPrice) : null;
+    const stopLossPrice = req.body?.stopLossPrice != null ? Number(req.body.stopLossPrice) : null;
+    if (side === 'BUY' && takeProfitPrice != null && !(takeProfitPrice > 0)) {
+      return res.status(400).json({ error: 'takeProfitPrice must be a positive number' });
+    }
+    if (side === 'BUY' && stopLossPrice != null && !(stopLossPrice > 0)) {
+      return res.status(400).json({ error: 'stopLossPrice must be a positive number' });
+    }
+
     const quote = await marketData.getQuote(symbol);
+
+    if (side === 'BUY' && takeProfitPrice != null && takeProfitPrice <= quote.price) {
+      return res.status(400).json({ error: 'takeProfitPrice must be above the current price for a long position' });
+    }
+    if (side === 'BUY' && stopLossPrice != null && stopLossPrice >= quote.price) {
+      return res.status(400).json({ error: 'stopLossPrice must be below the current price for a long position' });
+    }
+
     const order = side === 'BUY' ? buy(symbol, quantity, quote.price) : sell(symbol, quantity, quote.price);
+
+    if (side === 'BUY' && (takeProfitPrice != null || stopLossPrice != null)) {
+      createBracket(symbol, quantity, takeProfitPrice, stopLossPrice);
+    }
+
     res.json(order);
+  } catch (err) {
+    if (err instanceof TradingError) return res.status(400).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.get('/brackets', (req, res) => {
+  const symbol = req.query.symbol ? String(req.query.symbol) : undefined;
+  res.json(getActiveBrackets(symbol));
+});
+
+router.delete('/brackets/:id', (req, res, next) => {
+  try {
+    cancelBracket(Number(req.params.id));
+    res.json({ ok: true });
   } catch (err) {
     if (err instanceof TradingError) return res.status(400).json({ error: err.message });
     next(err);

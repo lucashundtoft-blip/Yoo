@@ -39,6 +39,19 @@ db.exec(`
     name TEXT,
     added_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS bracket_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    quantity REAL NOT NULL,
+    take_profit_price REAL,
+    stop_loss_price REAL,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'FILLED', 'CANCELLED')),
+    created_at TEXT NOT NULL,
+    filled_at TEXT,
+    filled_price REAL,
+    filled_leg TEXT CHECK (filled_leg IN ('TP', 'SL'))
+  );
 `);
 
 const existingAccount = db.prepare('SELECT id FROM account WHERE id = 1').get();

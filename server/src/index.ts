@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import './db.js';
 import { router } from './routes.js';
 import { marketData } from './marketData/index.js';
+import { checkBrackets } from './trading.js';
 
 const app = express();
 app.use(cors());
@@ -38,3 +39,10 @@ const PORT = Number(process.env.PORT) || 4000;
 app.listen(PORT, () => {
   console.log(`Yoo trading sim server listening on :${PORT} (data: ${marketData.name})`);
 });
+
+const BRACKET_CHECK_INTERVAL_MS = 15_000;
+setInterval(() => {
+  checkBrackets((symbol) => marketData.getQuote(symbol).then((q) => q.price)).catch((err) => {
+    console.error('Bracket check failed:', err);
+  });
+}, BRACKET_CHECK_INTERVAL_MS);

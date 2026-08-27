@@ -66,6 +66,19 @@ export interface Order {
   createdAt: string;
 }
 
+export interface BracketOrder {
+  id: number;
+  symbol: string;
+  quantity: number;
+  takeProfitPrice: number | null;
+  stopLossPrice: number | null;
+  status: 'ACTIVE' | 'FILLED' | 'CANCELLED';
+  createdAt: string;
+  filledAt: string | null;
+  filledPrice: number | null;
+  filledLeg: 'TP' | 'SL' | null;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -102,7 +115,19 @@ export const api = {
     request<string[]>(`/watchlist/${encodeURIComponent(symbol)}`, { method: 'DELETE' }),
   getPortfolio: () => request<Portfolio>('/portfolio'),
   getOrders: () => request<Order[]>('/orders'),
-  placeOrder: (symbol: string, side: 'BUY' | 'SELL', quantity: number) =>
-    request<Order>('/orders', { method: 'POST', body: JSON.stringify({ symbol, side, quantity }) }),
+  placeOrder: (
+    symbol: string,
+    side: 'BUY' | 'SELL',
+    quantity: number,
+    takeProfitPrice?: number | null,
+    stopLossPrice?: number | null
+  ) =>
+    request<Order>('/orders', {
+      method: 'POST',
+      body: JSON.stringify({ symbol, side, quantity, takeProfitPrice, stopLossPrice }),
+    }),
+  getBrackets: (symbol?: string) =>
+    request<BracketOrder[]>(`/brackets${symbol ? `?symbol=${encodeURIComponent(symbol)}` : ''}`),
+  cancelBracket: (id: number) => request<{ ok: boolean }>(`/brackets/${id}`, { method: 'DELETE' }),
   resetAccount: () => request<{ ok: boolean }>('/account/reset', { method: 'POST' }),
 };
