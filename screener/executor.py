@@ -7,14 +7,17 @@ free paper-trading account is enough, since this only reads market data.)
 
 By default the ticker universe is the S&P 500 (scraped from Wikipedia). Pass
 --universe fmp to instead pull a filtered universe from FMP's company
-screener (needs FMP_API_KEY, a free key from
-https://financialmodelingprep.com/register), or --tickers to use your own list.
+screener, --universe fmp-active for FMP's full unfiltered list of
+actively-trading symbols (needs FMP_API_KEY, a free key from
+https://financialmodelingprep.com/register either way), or --tickers to use
+your own list.
 
 Usage:
     python executor.py
     python executor.py --tolerance 0.02 --period 1y --out matches.csv
     python executor.py --tickers my_watchlist.txt
     python executor.py --universe fmp
+    python executor.py --universe fmp-active
 """
 
 import argparse
@@ -32,6 +35,7 @@ from screener import check_coil
 
 SP500_LIST_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 FMP_SCREENER_URL = "https://financialmodelingprep.com/stable/company-screener"
+FMP_ACTIVELY_TRADING_URL = "https://financialmodelingprep.com/stable/actively-trading-list"
 
 PERIOD_TO_DAYS = {
     "1mo": 30,
@@ -54,6 +58,16 @@ def load_tickers_from_file(path: str) -> list[str]:
         return [line.strip().upper() for line in f if line.strip()]
 
 
+def get_fmp_api_key(universe_flag: str) -> str:
+    api_key = os.environ.get("FMP_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "Set FMP_API_KEY (a free key from https://financialmodelingprep.com/register) "
+            f"to use --universe {universe_flag}."
+        )
+    return api_key
+
+
 def get_fmp_screener_tickers(
     market_cap_more_than: float = 300_000_000,
     volume_more_than: int = 100_000,
@@ -65,12 +79,7 @@ def get_fmp_screener_tickers(
     Defaults filter to actively-traded US common stock with enough size and
     liquidity to be worth scanning.
     """
-    api_key = os.environ.get("FMP_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "Set FMP_API_KEY (a free key from https://financialmodelingprep.com/register) "
-            "to use --universe fmp."
-        )
+    api_key = get_fmp_api_key("fmp")
     params = {
         "marketCapMoreThan": market_cap_more_than,
         "volumeMoreThan": volume_more_than,
@@ -80,6 +89,20 @@ def get_fmp_screener_tickers(
         "apikey": api_key,
     }
     res = requests.get(FMP_SCREENER_URL, params=params)
+    res.raise_for_status()
+    rows = res.json()
+    return [row["symbol"] for row in rows if row.get("symbol")]
+
+
+def get_fmp_actively_trading_tickers() -> list[str]:
+    """Pull the full unfiltered list of currently-trading symbols from FMP.
+
+    Requires FMP_API_KEY. Unlike get_fmp_screener_tickers, this applies no
+    market cap, volume, or exchange filtering, so it covers a much broader
+    (and noisier, and slower to scan) universe.
+    """
+    api_key = get_fmp_api_key("fmp-active")
+    res = requests.get(FMP_ACTIVELY_TRADING_URL, params={"apikey": api_key})
     res.raise_for_status()
     rows = res.json()
     return [row["symbol"] for row in rows if row.get("symbol")]
@@ -152,9 +175,10 @@ def main():
     parser.add_argument(
         "--universe",
         default="sp500",
-        choices=["sp500", "fmp"],
-        help="Ticker source when --tickers isn't given: 'sp500' (default, scraped from Wikipedia) "
-        "or 'fmp' (FMP's company screener, needs FMP_API_KEY)",
+        choices=["sp500", "fmp", "fmp-active"],
+        help="Ticker source when --tickers isn't given: 'sp500' (default, scraped from Wikipedia), "
+        "'fmp' (FMP's filtered company screener, needs FMP_API_KEY), or 'fmp-active' "
+        "(every actively-trading symbol from FMP, unfiltered and much larger, needs FMP_API_KEY)",
     )
     parser.add_argument(
         "--period",
@@ -172,6 +196,8 @@ def main():
         tickers = load_tickers_from_file(args.tickers)
     elif args.universe == "fmp":
         tickers = get_fmp_screener_tickers()
+    elif args.universe == "fmp-active":
+        tickers = get_fmp_actively_trading_tickers()
     else:
         tickers = get_sp500_tickers()
 
