@@ -6,3 +6,8 @@ services:
     buildCommand: npm install && npm run build
     startCommand: npm start
     autoDeploy: true
+    envVars:
+      - key: FINNHUB_API_KEY
+        sync: false
+      - key: FMP_API_KEY
+        sync: false
