@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import './db.js';
 import { router } from './routes.js';
-import { marketData } from './marketData/index.js';
+import { marketData, hasCommodityData } from './marketData/index.js';
 import { checkBrackets } from './trading.js';
 
 const app = express();
@@ -15,7 +15,7 @@ app.use(express.json());
 app.use('/api', router);
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, dataProvider: marketData.name });
+  res.json({ ok: true, dataProvider: marketData.name, hasCommodityData });
 });
 
 // In production (single-service deploys like Render), serve the built client

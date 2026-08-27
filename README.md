@@ -30,6 +30,30 @@ invalid, rate-limited, or the network is unreachable, the app automatically
 falls back to the next provider (and ultimately to simulated data) per-request
 so it keeps working either way.
 
+### Futures data
+
+The [Futures Heat Map](client/src/pages/FuturesHeatmapPage.tsx) page is
+simulated by default, same as an unrecognized stock ticker. Real futures
+contract quotes (CME, etc.) aren't available for free from any provider we
+checked -- Alpha Vantage's live spot metals and FMP's commodities/futures
+endpoints both require a paid plan. The one real, free-tier source we found
+is Alpha Vantage's commodity benchmark data for crude oil, natural gas,
+copper, corn, and wheat:
+
+```bash
+export ALPHA_VANTAGE_API_KEY=your_key_here
+```
+
+With that key set, the `CL`/`MCL` (WTI crude), `NG`, `HG`, `ZC`, and `ZW`
+tiles use real daily prices (marked **Real** on the heat map) instead of
+simulated data; get a free key from
+[Alpha Vantage](https://www.alphavantage.co/support/#api-key). Everything
+else on the heat map -- metals (gold, silver) and stock-index futures --
+stays simulated regardless, since no free data source exists for those. Note
+this is daily benchmark pricing, not a live intraday futures tick feed, and
+Alpha Vantage's free tier is rate-limited to ~25 requests/day, so results are
+cached for 6 hours per commodity.
+
 ## Indicators
 
 - **Simple Moving Average (SMA)** — toggle a 20- or 50-period SMA line on any

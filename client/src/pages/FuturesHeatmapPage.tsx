@@ -9,15 +9,20 @@ interface FutureDef {
   group: string;
 }
 
-// A real futures feed isn't available (Finnhub's free tier is equities-only),
-// so these prices come from the same deterministic simulated provider used
-// for unrecognized stock tickers — clearly labeled below, not presented as live.
+// CL, NG, HG, ZC, and ZW use real Alpha Vantage commodity data when
+// ALPHA_VANTAGE_API_KEY is set on the server (see README). Metals and
+// stock-index futures have no free-tier data source we could find, so those
+// -- and everything else, if the key isn't set -- fall back to the same
+// deterministic simulated provider used for unrecognized stock tickers.
+const REAL_DATA_SYMBOLS = new Set(['CL', 'MCL', 'NG', 'HG', 'ZC', 'ZW']);
+
 const FUTURES: FutureDef[] = [
   { symbol: 'ES', name: 'E-mini S&P 500', group: 'Indices' },
   { symbol: 'NQ', name: 'E-mini Nasdaq 100', group: 'Indices' },
   { symbol: 'YM', name: 'E-mini Dow', group: 'Indices' },
   { symbol: 'RTY', name: 'E-mini Russell 2000', group: 'Indices' },
   { symbol: 'CL', name: 'Crude Oil', group: 'Energy' },
+  { symbol: 'MCL', name: 'Micro WTI Crude Oil', group: 'Energy' },
   { symbol: 'NG', name: 'Natural Gas', group: 'Energy' },
   { symbol: 'RB', name: 'RBOB Gasoline', group: 'Energy' },
   { symbol: 'GC', name: 'Gold', group: 'Metals' },
@@ -47,6 +52,7 @@ export function FuturesHeatmapPage() {
   const navigate = useNavigate();
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [loading, setLoading] = useState(true);
+  const [hasCommodityData, setHasCommodityData] = useState(false);
 
   async function load() {
     const entries = await Promise.all(
@@ -67,6 +73,10 @@ export function FuturesHeatmapPage() {
   }
 
   useEffect(() => {
+    api.getHealth().then((h) => setHasCommodityData(h.hasCommodityData)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     load();
     const interval = setInterval(load, 10_000);
     return () => clearInterval(interval);
@@ -78,8 +88,20 @@ export function FuturesHeatmapPage() {
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ margin: 0 }}>Futures Heat Map</h2>
         <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>
-          Simulated prices — no live futures feed is configured, so tiles use the same deterministic
-          practice data as an unrecognized stock ticker. For layout/practice only, not real market data.
+          {hasCommodityData ? (
+            <>
+              Tiles marked <strong>Real</strong> use live Alpha Vantage commodity data (crude oil, natural gas,
+              copper, corn, wheat). Everything else — metals and stock-index futures have no free-tier data
+              source we could find — uses the same deterministic simulated provider as an unrecognized stock
+              ticker, for layout/practice only.
+            </>
+          ) : (
+            <>
+              All prices are simulated — set ALPHA_VANTAGE_API_KEY on the server to get real data for crude
+              oil, natural gas, copper, corn, and wheat. Metals and stock-index futures have no free-tier
+              data source we could find, so those stay simulated either way.
+            </>
+          )}
         </div>
       </div>
 
@@ -110,7 +132,25 @@ export function FuturesHeatmapPage() {
                         cursor: 'pointer',
                       }}
                     >
-                      <div style={{ fontWeight: 800, fontSize: 16 }}>{f.symbol}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ fontWeight: 800, fontSize: 16 }}>{f.symbol}</div>
+                        {hasCommodityData && REAL_DATA_SYMBOLS.has(f.symbol) && (
+                          <span
+                            style={{
+                              fontSize: 9,
+                              fontWeight: 700,
+                              letterSpacing: 0.4,
+                              textTransform: 'uppercase',
+                              color: 'var(--green)',
+                              border: '1px solid var(--green)',
+                              borderRadius: 4,
+                              padding: '1px 4px',
+                            }}
+                          >
+                            Real
+                          </span>
+                        )}
+                      </div>
                       <div style={{ fontSize: 11, color: 'rgba(230,233,237,0.75)', marginBottom: 8 }}>{f.name}</div>
                       {quote ? (
                         <>

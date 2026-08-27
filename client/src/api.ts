@@ -130,4 +130,5 @@ export const api = {
     request<BracketOrder[]>(`/brackets${symbol ? `?symbol=${encodeURIComponent(symbol)}` : ''}`),
   cancelBracket: (id: number) => request<{ ok: boolean }>(`/brackets/${id}`, { method: 'DELETE' }),
   resetAccount: () => request<{ ok: boolean }>('/account/reset', { method: 'POST' }),
+  getHealth: () => request<{ ok: boolean; dataProvider: string; hasCommodityData: boolean }>('/health'),
 };
