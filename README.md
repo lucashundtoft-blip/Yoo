@@ -16,15 +16,19 @@ per-symbol random walks, so it works fully offline with no API key and never
 stops "trading," even when real markets are closed.
 
 To use real prices, get a free API key from [Finnhub](https://finnhub.io/register)
-and set it before starting the server:
+and/or [Financial Modeling Prep](https://financialmodelingprep.com/register)
+and set them before starting the server:
 
 ```bash
 export FINNHUB_API_KEY=your_key_here
+export FMP_API_KEY=your_key_here
 ```
 
-If the key is missing, invalid, rate-limited, or the network is unreachable,
-the app automatically falls back to simulated data per-request so it keeps
-working either way.
+If both are set, Finnhub is tried first and FMP is used as a fallback (useful
+since free-tier rate limits differ between the two). If a key is missing,
+invalid, rate-limited, or the network is unreachable, the app automatically
+falls back to the next provider (and ultimately to simulated data) per-request
+so it keeps working either way.
 
 ## Indicators
 
