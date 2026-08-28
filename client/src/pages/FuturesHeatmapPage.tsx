@@ -18,7 +18,9 @@ const REAL_DATA_SYMBOLS = new Set(['CL', 'MCL', 'NG', 'HG', 'ZC', 'ZW']);
 
 const FUTURES: FutureDef[] = [
   { symbol: 'ES', name: 'E-mini S&P 500', group: 'Indices' },
+  { symbol: 'MES', name: 'Micro E-mini S&P 500', group: 'Indices' },
   { symbol: 'NQ', name: 'E-mini Nasdaq 100', group: 'Indices' },
+  { symbol: 'MNQ', name: 'Micro E-mini Nasdaq 100', group: 'Indices' },
   { symbol: 'YM', name: 'E-mini Dow', group: 'Indices' },
   { symbol: 'RTY', name: 'E-mini Russell 2000', group: 'Indices' },
   { symbol: 'CL', name: 'Crude Oil', group: 'Energy' },
