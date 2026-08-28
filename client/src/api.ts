@@ -66,6 +66,20 @@ export interface Order {
   createdAt: string;
 }
 
+export interface PatternAlert {
+  id: number;
+  symbol: string;
+  kind: 'BULLISH_DIVERGENCE' | 'BEARISH_DIVERGENCE';
+  price: number;
+  priceChangePercent: number;
+  createdAt: string;
+}
+
+export interface AlertsResponse {
+  symbols: string[];
+  alerts: PatternAlert[];
+}
+
 export interface BracketOrder {
   id: number;
   symbol: string;
@@ -131,4 +145,5 @@ export const api = {
   cancelBracket: (id: number) => request<{ ok: boolean }>(`/brackets/${id}`, { method: 'DELETE' }),
   resetAccount: () => request<{ ok: boolean }>('/account/reset', { method: 'POST' }),
   getHealth: () => request<{ ok: boolean; dataProvider: string; hasCommodityData: boolean }>('/health'),
+  getAlerts: (limit = 50) => request<AlertsResponse>(`/alerts?limit=${limit}`),
 };

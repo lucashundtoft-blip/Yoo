@@ -14,6 +14,7 @@ import {
   TradingError,
 } from './trading.js';
 import { getWatchlist, addToWatchlist, removeFromWatchlist } from './watchlist.js';
+import { getRecentAlerts, WATCHED_SYMBOLS } from './patternWatcher.js';
 
 export const router = Router();
 
@@ -176,6 +177,11 @@ router.delete('/brackets/:id', (req, res, next) => {
     if (err instanceof TradingError) return res.status(400).json({ error: err.message });
     next(err);
   }
+});
+
+router.get('/alerts', (req, res) => {
+  const limit = req.query.limit ? Number(req.query.limit) : 50;
+  res.json({ symbols: WATCHED_SYMBOLS, alerts: getRecentAlerts(limit) });
 });
 
 router.post('/account/reset', (_req, res) => {

@@ -7,6 +7,7 @@ import './db.js';
 import { router } from './routes.js';
 import { marketData, hasCommodityData } from './marketData/index.js';
 import { checkBrackets } from './trading.js';
+import { checkPatterns } from './patternWatcher.js';
 
 const app = express();
 app.use(cors());
@@ -46,3 +47,9 @@ setInterval(() => {
     console.error('Bracket check failed:', err);
   });
 }, BRACKET_CHECK_INTERVAL_MS);
+
+const PATTERN_CHECK_INTERVAL_MS = 60_000;
+setInterval(() => {
+  checkPatterns().catch((err) => console.error('Pattern check failed:', err));
+}, PATTERN_CHECK_INTERVAL_MS);
+checkPatterns().catch((err) => console.error('Pattern check failed:', err));

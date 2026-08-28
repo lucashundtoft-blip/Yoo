@@ -49,6 +49,16 @@ export function ReplayIcon({ active }: IconProps) {
   );
 }
 
+export function AlertsIcon({ active }: IconProps) {
+  return (
+    <svg {...common} stroke={active ? '#2f81f7' : '#8b939d'}>
+      <path d="M12 3.5 4 8.5v6l8 5 8-5v-6l-8-5Z" />
+      <path d="M12 8.5v4" />
+      <circle cx="12" cy="15.5" r="0.9" fill={active ? '#2f81f7' : '#8b939d'} stroke="none" />
+    </svg>
+  );
+}
+
 export function FuturesIcon({ active }: IconProps) {
   return (
     <svg {...common} stroke={active ? '#2f81f7' : '#8b939d'}>

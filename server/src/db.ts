@@ -40,6 +40,15 @@ db.exec(`
     added_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS pattern_alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('BULLISH_DIVERGENCE', 'BEARISH_DIVERGENCE')),
+    price REAL NOT NULL,
+    price_change_percent REAL NOT NULL,
+    created_at TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS bracket_orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     symbol TEXT NOT NULL,
