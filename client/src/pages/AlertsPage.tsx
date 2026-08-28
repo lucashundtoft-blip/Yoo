@@ -10,6 +10,7 @@ const KIND_LABEL: Record<PatternAlert['kind'], string> = {
 export function AlertsPage() {
   const [alerts, setAlerts] = useState<PatternAlert[]>([]);
   const [symbols, setSymbols] = useState<string[]>([]);
+  const [hasFuturesData, setHasFuturesData] = useState(false);
   const [loading, setLoading] = useState(true);
 
   async function load() {
@@ -25,14 +26,30 @@ export function AlertsPage() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    api
+      .getHealth()
+      .then((h) => setHasFuturesData(h.hasFuturesData))
+      .catch(() => {});
+  }, []);
+
   return (
     <div>
       <h2 style={{ marginBottom: 4 }}>Pattern Alerts</h2>
       <div style={{ fontSize: 13, color: 'var(--text-dim)', marginBottom: 16, maxWidth: 640 }}>
-        Watching {symbols.join(', ') || '—'} for price-vs-PVT divergence, checked every minute. This
-        runs on simulated placeholder data — no free real-time futures feed exists for these symbols
-        yet — so treat alerts as a demo of the detection logic, not a real trading signal, until a live
-        feed is wired in.
+        Watching {symbols.join(', ') || '—'} for price-vs-PVT divergence, checked every minute.{' '}
+        {hasFuturesData ? (
+          <>
+            Running on real Databento CME Globex data — this is now checking actual traded prices, not
+            simulated ones.
+          </>
+        ) : (
+          <>
+            Running on simulated placeholder data — set DATABENTO_API_KEY on the server (see README) to
+            switch this to real CME Globex data. Until then, treat alerts as a demo of the detection
+            logic, not a real trading signal.
+          </>
+        )}
       </div>
       <div className="card">
         {loading ? (

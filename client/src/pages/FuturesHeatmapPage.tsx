@@ -10,11 +10,15 @@ interface FutureDef {
 }
 
 // CL, NG, HG, ZC, and ZW use real Alpha Vantage commodity data when
-// ALPHA_VANTAGE_API_KEY is set on the server (see README). Metals and
-// stock-index futures have no free-tier data source we could find, so those
-// -- and everything else, if the key isn't set -- fall back to the same
+// ALPHA_VANTAGE_API_KEY is set on the server (see README). MCL, MGC, and SIL
+// use real Databento CME Globex data when DATABENTO_API_KEY is set --
+// Databento takes priority for MCL since it's the actual futures contract,
+// not Alpha Vantage's spot-price proxy. Everything else -- other metals and
+// every stock-index future -- has no free-tier data source we could find, so
+// those (and everything, if no key is set) fall back to the same
 // deterministic simulated provider used for unrecognized stock tickers.
-const REAL_DATA_SYMBOLS = new Set(['CL', 'MCL', 'NG', 'HG', 'ZC', 'ZW']);
+const ALPHA_VANTAGE_SYMBOLS = new Set(['CL', 'NG', 'HG', 'ZC', 'ZW']);
+const DATABENTO_SYMBOLS = new Set(['MCL', 'MGC', 'SIL']);
 
 const FUTURES: FutureDef[] = [
   { symbol: 'ES', name: 'E-mini S&P 500', group: 'Indices' },
@@ -57,6 +61,7 @@ export function FuturesHeatmapPage() {
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [loading, setLoading] = useState(true);
   const [hasCommodityData, setHasCommodityData] = useState(false);
+  const [hasFuturesData, setHasFuturesData] = useState(false);
 
   async function load() {
     const entries = await Promise.all(
@@ -77,7 +82,13 @@ export function FuturesHeatmapPage() {
   }
 
   useEffect(() => {
-    api.getHealth().then((h) => setHasCommodityData(h.hasCommodityData)).catch(() => {});
+    api
+      .getHealth()
+      .then((h) => {
+        setHasCommodityData(h.hasCommodityData);
+        setHasFuturesData(h.hasFuturesData);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -92,20 +103,20 @@ export function FuturesHeatmapPage() {
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ margin: 0 }}>Futures Heat Map</h2>
         <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>
-          {hasCommodityData ? (
+          {hasFuturesData && (
             <>
-              Tiles marked <strong>Real</strong> use live Alpha Vantage commodity data (crude oil, natural gas,
-              copper, corn, wheat). Everything else — metals and stock-index futures have no free-tier data
-              source we could find — uses the same deterministic simulated provider as an unrecognized stock
-              ticker, for layout/practice only.
-            </>
-          ) : (
-            <>
-              All prices are simulated — set ALPHA_VANTAGE_API_KEY on the server to get real data for crude
-              oil, natural gas, copper, corn, and wheat. Metals and stock-index futures have no free-tier
-              data source we could find, so those stay simulated either way.
+              Tiles marked <strong>Real (Databento)</strong> use live CME Globex data for the actual futures
+              contract.{' '}
             </>
           )}
+          {hasCommodityData && (
+            <>
+              Tiles marked <strong>Real (AV)</strong> use Alpha Vantage commodity benchmark data.{' '}
+            </>
+          )}
+          {!hasFuturesData && !hasCommodityData && 'All prices are simulated — see README for setup. '}
+          Everything else — other metals and every stock-index future — has no free-tier data source we
+          could find, so those stay simulated regardless.
         </div>
       </div>
 
@@ -138,7 +149,8 @@ export function FuturesHeatmapPage() {
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <div style={{ fontWeight: 800, fontSize: 16 }}>{f.symbol}</div>
-                        {hasCommodityData && REAL_DATA_SYMBOLS.has(f.symbol) && (
+                        {((hasFuturesData && DATABENTO_SYMBOLS.has(f.symbol)) ||
+                          (hasCommodityData && ALPHA_VANTAGE_SYMBOLS.has(f.symbol))) && (
                           <span
                             style={{
                               fontSize: 9,

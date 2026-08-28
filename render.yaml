@@ -13,3 +13,5 @@ services:
         sync: false
       - key: ALPHA_VANTAGE_API_KEY
         sync: false
+      - key: DATABENTO_API_KEY
+        sync: false
