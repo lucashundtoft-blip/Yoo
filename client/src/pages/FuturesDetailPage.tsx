@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, type Candle, type FuturesAccount, type FuturesContract, type Projection, type Quote } from '../api';
-import { Chart } from '../components/Chart';
+import { Chart, type HoverBar } from '../components/Chart';
 import { FuturesOrderPanel } from '../components/FuturesOrderPanel';
 import { FuturesSubNav } from '../components/FuturesSubNav';
 import { aggregateByCount, aggregateByCalendarPeriod } from '../aggregateCandles';
@@ -42,6 +42,7 @@ export function FuturesDetailPage() {
   const [account, setAccount] = useState<FuturesAccount | null>(null);
   const [rangeIndex, setRangeIndex] = useState(2);
   const [error, setError] = useState<string | null>(null);
+  const [hoverBar, setHoverBar] = useState<HoverBar | null>(null);
 
   const range = RANGES[rangeIndex];
 
@@ -119,6 +120,15 @@ export function FuturesDetailPage() {
   const position = account?.positions.find((p) => p.symbol === contract.symbol);
   const livePl = position && quote ? (quote.price - position.avgPrice) * contract.multiplier * position.quantity : null;
 
+  // TradingView-style readout: shows the hovered bar under the crosshair,
+  // falling back to the most recent bar when the pointer isn't over the chart.
+  const lastCandle = candles[candles.length - 1];
+  const displayBar: HoverBar | null =
+    hoverBar ??
+    (lastCandle
+      ? { time: lastCandle.time, open: lastCandle.open, high: lastCandle.high, low: lastCandle.low, close: lastCandle.close, volume: lastCandle.volume }
+      : null);
+
   return (
     <div>
       <FuturesSubNav />
@@ -180,6 +190,18 @@ export function FuturesDetailPage() {
                 </label>
               </div>
             </div>
+            {displayBar && (
+              <div
+                style={{ display: 'flex', gap: 12, fontVariantNumeric: 'tabular-nums', fontSize: 13, marginBottom: 6, flexWrap: 'wrap' }}
+                className={changeClass(displayBar.close - displayBar.open)}
+              >
+                <span>O <strong>{formatCurrency(displayBar.open)}</strong></span>
+                <span>H <strong>{formatCurrency(displayBar.high)}</strong></span>
+                <span>L <strong>{formatCurrency(displayBar.low)}</strong></span>
+                <span>C <strong>{formatCurrency(displayBar.close)}</strong></span>
+                <span style={{ color: 'var(--text-dim)' }}>Vol <strong>{displayBar.volume.toLocaleString()}</strong></span>
+              </div>
+            )}
             {(smaPeriods.length > 0 || (showProjection && projection)) && (
               <div className="legend">
                 {smaPeriods.map((period) => (
@@ -211,6 +233,7 @@ export function FuturesDetailPage() {
               projection={projection}
               showProjection={showProjection}
               smaPeriods={smaPeriods}
+              onHoverBar={setHoverBar}
               positionLine={
                 position
                   ? {
