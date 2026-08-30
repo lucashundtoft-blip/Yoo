@@ -23,6 +23,9 @@ import {
   getFuturesPositions,
   getFuturesAccountSummary,
   resetFuturesAccount,
+  createFuturesBracket,
+  getActiveFuturesBrackets,
+  cancelFuturesBracket,
   FuturesTradingError,
 } from './futuresTrading.js';
 
@@ -246,9 +249,54 @@ router.post('/futures/orders', async (req, res, next) => {
       return res.status(400).json({ error: 'quantity must be a positive whole number of contracts' });
     }
 
+    const takeProfitPrice = req.body?.takeProfitPrice != null ? Number(req.body.takeProfitPrice) : null;
+    const stopLossPrice = req.body?.stopLossPrice != null ? Number(req.body.stopLossPrice) : null;
+    if (takeProfitPrice != null && !(takeProfitPrice > 0)) {
+      return res.status(400).json({ error: 'takeProfitPrice must be a positive number' });
+    }
+    if (stopLossPrice != null && !(stopLossPrice > 0)) {
+      return res.status(400).json({ error: 'stopLossPrice must be a positive number' });
+    }
+
     const quote = await marketData.getQuote(symbol);
+
+    // A BUY opens/adds to a long: take-profit sits above, stop-loss below.
+    // A SELL opens/adds to a short: the mirror image.
+    if (side === 'BUY' && takeProfitPrice != null && takeProfitPrice <= quote.price) {
+      return res.status(400).json({ error: 'takeProfitPrice must be above the current price for a long position' });
+    }
+    if (side === 'BUY' && stopLossPrice != null && stopLossPrice >= quote.price) {
+      return res.status(400).json({ error: 'stopLossPrice must be below the current price for a long position' });
+    }
+    if (side === 'SELL' && takeProfitPrice != null && takeProfitPrice >= quote.price) {
+      return res.status(400).json({ error: 'takeProfitPrice must be below the current price for a short position' });
+    }
+    if (side === 'SELL' && stopLossPrice != null && stopLossPrice <= quote.price) {
+      return res.status(400).json({ error: 'stopLossPrice must be above the current price for a short position' });
+    }
+
     const order = side === 'BUY' ? buyFutures(symbol, quantity, quote.price) : sellFutures(symbol, quantity, quote.price);
+
+    if (takeProfitPrice != null || stopLossPrice != null) {
+      createFuturesBracket(symbol, side, quantity, takeProfitPrice, stopLossPrice);
+    }
+
     res.json(order);
+  } catch (err) {
+    if (err instanceof FuturesTradingError) return res.status(400).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.get('/futures/brackets', (req, res) => {
+  const symbol = req.query.symbol ? String(req.query.symbol) : undefined;
+  res.json(getActiveFuturesBrackets(symbol));
+});
+
+router.delete('/futures/brackets/:id', (req, res, next) => {
+  try {
+    cancelFuturesBracket(Number(req.params.id));
+    res.json({ ok: true });
   } catch (err) {
     if (err instanceof FuturesTradingError) return res.status(400).json({ error: err.message });
     next(err);

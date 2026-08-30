@@ -167,6 +167,135 @@ export function resetFuturesAccount(): void {
     db.prepare('UPDATE futures_account SET cash = ? WHERE id = 1').run(STARTING_FUTURES_BALANCE);
     db.prepare('DELETE FROM futures_positions').run();
     db.prepare('DELETE FROM futures_orders').run();
+    db.prepare('DELETE FROM futures_bracket_orders').run();
   });
   tx();
+}
+
+export interface FuturesBracketOrder {
+  id: number;
+  symbol: string;
+  side: 'BUY' | 'SELL'; // side of the entry: BUY=long, SELL=short
+  quantity: number;
+  takeProfitPrice: number | null;
+  stopLossPrice: number | null;
+  status: 'ACTIVE' | 'FILLED' | 'CANCELLED';
+  createdAt: string;
+  filledAt: string | null;
+  filledPrice: number | null;
+  filledLeg: 'TP' | 'SL' | null;
+}
+
+function rowToFuturesBracket(row: any): FuturesBracketOrder {
+  return {
+    id: row.id,
+    symbol: row.symbol,
+    side: row.side,
+    quantity: row.quantity,
+    takeProfitPrice: row.take_profit_price,
+    stopLossPrice: row.stop_loss_price,
+    status: row.status,
+    createdAt: row.created_at,
+    filledAt: row.filled_at,
+    filledPrice: row.filled_price,
+    filledLeg: row.filled_leg,
+  };
+}
+
+/** Attaches a take-profit / stop-loss bracket to contracts just bought or
+ * sold. `side` is the side of the entry (BUY=long, SELL=short), since which
+ * direction closes the position -- and which way price needs to move to hit
+ * each level -- depends on it. Doesn't place a real order with a broker; a
+ * background check (see checkFuturesBrackets) polls quotes and closes the
+ * position automatically once either level is touched. */
+export function createFuturesBracket(
+  symbol: string,
+  side: 'BUY' | 'SELL',
+  quantity: number,
+  takeProfitPrice: number | null,
+  stopLossPrice: number | null
+): FuturesBracketOrder {
+  symbol = symbol.toUpperCase();
+  if (quantity <= 0) throw new FuturesTradingError('Quantity must be positive');
+  if (takeProfitPrice == null && stopLossPrice == null) {
+    throw new FuturesTradingError('Provide at least one of takeProfitPrice or stopLossPrice');
+  }
+  const createdAt = new Date().toISOString();
+  const info = db
+    .prepare(
+      `INSERT INTO futures_bracket_orders (symbol, side, quantity, take_profit_price, stop_loss_price, status, created_at)
+       VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?)`
+    )
+    .run(symbol, side, quantity, takeProfitPrice, stopLossPrice, createdAt);
+  return {
+    id: Number(info.lastInsertRowid),
+    symbol,
+    side,
+    quantity,
+    takeProfitPrice,
+    stopLossPrice,
+    status: 'ACTIVE',
+    createdAt,
+    filledAt: null,
+    filledPrice: null,
+    filledLeg: null,
+  };
+}
+
+export function getActiveFuturesBrackets(symbol?: string): FuturesBracketOrder[] {
+  const rows = symbol
+    ? db
+        .prepare("SELECT * FROM futures_bracket_orders WHERE status = 'ACTIVE' AND symbol = ? ORDER BY id DESC")
+        .all(symbol.toUpperCase())
+    : db.prepare("SELECT * FROM futures_bracket_orders WHERE status = 'ACTIVE' ORDER BY id DESC").all();
+  return rows.map(rowToFuturesBracket);
+}
+
+export function cancelFuturesBracket(id: number): void {
+  const info = db
+    .prepare("UPDATE futures_bracket_orders SET status = 'CANCELLED' WHERE id = ? AND status = 'ACTIVE'")
+    .run(id);
+  if (info.changes === 0) throw new FuturesTradingError('No active bracket order with that id');
+}
+
+/** Checks every active futures bracket against a live price and closes the
+ * position if either the take-profit or stop-loss level has been touched.
+ * Direction depends on the entry side: a long (BUY) bracket's take-profit
+ * triggers on price rising to it and closes with a sell; a short (SELL)
+ * bracket's take-profit triggers on price falling to it and closes with a
+ * buy -- stop-loss is the mirror of each. Skips (rather than throws) a
+ * bracket whose contracts were already closed some other way. */
+export async function checkFuturesBrackets(getPrice: (symbol: string) => Promise<number>): Promise<void> {
+  for (const bracket of getActiveFuturesBrackets()) {
+    let price: number;
+    try {
+      price = await getPrice(bracket.symbol);
+    } catch {
+      continue;
+    }
+    if (!price) continue;
+
+    const isLong = bracket.side === 'BUY';
+    let leg: 'TP' | 'SL' | null = null;
+    if (isLong) {
+      if (bracket.takeProfitPrice != null && price >= bracket.takeProfitPrice) leg = 'TP';
+      else if (bracket.stopLossPrice != null && price <= bracket.stopLossPrice) leg = 'SL';
+    } else {
+      if (bracket.takeProfitPrice != null && price <= bracket.takeProfitPrice) leg = 'TP';
+      else if (bracket.stopLossPrice != null && price >= bracket.stopLossPrice) leg = 'SL';
+    }
+    if (!leg) continue;
+
+    try {
+      if (isLong) sellFutures(bracket.symbol, bracket.quantity, price);
+      else buyFutures(bracket.symbol, bracket.quantity, price);
+      db.prepare(
+        "UPDATE futures_bracket_orders SET status = 'FILLED', filled_at = ?, filled_price = ?, filled_leg = ? WHERE id = ?"
+      ).run(new Date().toISOString(), price, leg, bracket.id);
+    } catch (err) {
+      if (err instanceof FuturesTradingError) {
+        db.prepare("UPDATE futures_bracket_orders SET status = 'CANCELLED' WHERE id = ?").run(bracket.id);
+      }
+    }
+  }
 }

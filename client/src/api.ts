@@ -131,6 +131,20 @@ export interface FuturesOrder {
   createdAt: string;
 }
 
+export interface FuturesBracketOrder {
+  id: number;
+  symbol: string;
+  side: 'BUY' | 'SELL'; // side of the entry: BUY=long, SELL=short
+  quantity: number;
+  takeProfitPrice: number | null;
+  stopLossPrice: number | null;
+  status: 'ACTIVE' | 'FILLED' | 'CANCELLED';
+  createdAt: string;
+  filledAt: string | null;
+  filledPrice: number | null;
+  filledLeg: 'TP' | 'SL' | null;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -190,10 +204,19 @@ export const api = {
   getFuturesContracts: () => request<FuturesContract[]>('/futures/contracts'),
   getFuturesAccount: () => request<FuturesAccount>('/futures/account'),
   getFuturesOrders: () => request<FuturesOrder[]>('/futures/orders'),
-  placeFuturesOrder: (symbol: string, side: 'BUY' | 'SELL', quantity: number) =>
+  placeFuturesOrder: (
+    symbol: string,
+    side: 'BUY' | 'SELL',
+    quantity: number,
+    takeProfitPrice?: number | null,
+    stopLossPrice?: number | null
+  ) =>
     request<FuturesOrder>('/futures/orders', {
       method: 'POST',
-      body: JSON.stringify({ symbol, side, quantity }),
+      body: JSON.stringify({ symbol, side, quantity, takeProfitPrice, stopLossPrice }),
     }),
+  getFuturesBrackets: (symbol?: string) =>
+    request<FuturesBracketOrder[]>(`/futures/brackets${symbol ? `?symbol=${encodeURIComponent(symbol)}` : ''}`),
+  cancelFuturesBracket: (id: number) => request<{ ok: boolean }>(`/futures/brackets/${id}`, { method: 'DELETE' }),
   resetFuturesAccount: () => request<{ ok: boolean }>('/futures/account/reset', { method: 'POST' }),
 };

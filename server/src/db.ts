@@ -83,6 +83,20 @@ db.exec(`
     realized_pl REAL NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS futures_bracket_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    symbol TEXT NOT NULL,
+    side TEXT NOT NULL CHECK (side IN ('BUY', 'SELL')), -- side of the entry: BUY=long, SELL=short
+    quantity REAL NOT NULL,
+    take_profit_price REAL,
+    stop_loss_price REAL,
+    status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'FILLED', 'CANCELLED')),
+    created_at TEXT NOT NULL,
+    filled_at TEXT,
+    filled_price REAL,
+    filled_leg TEXT CHECK (filled_leg IN ('TP', 'SL'))
+  );
 `);
 
 const existingFuturesAccount = db.prepare('SELECT id FROM futures_account WHERE id = 1').get();
