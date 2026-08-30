@@ -15,7 +15,7 @@ import { computeSMA, SMA_COLORS } from '../sma';
 import { toHeikinAshi } from '../heikinAshi';
 import { computeTrendChannel } from '../projection';
 
-const BOLD_SMA_PERIODS = new Set([20, 200, 400]);
+const BOLD_SMA_PERIODS = new Set([20, 50, 200, 400]);
 
 export interface HoverBar {
   time: number;

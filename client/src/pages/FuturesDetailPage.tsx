@@ -4,14 +4,32 @@ import { api, type Candle, type FuturesAccount, type FuturesContract, type Proje
 import { Chart } from '../components/Chart';
 import { FuturesOrderPanel } from '../components/FuturesOrderPanel';
 import { FuturesSubNav } from '../components/FuturesSubNav';
-import { formatCurrency, formatPercent, changeClass } from '../format';
+import { aggregateByCount, aggregateByCalendarPeriod } from '../aggregateCandles';
+import { formatCurrency, formatPercent, formatSigned, changeClass } from '../format';
+import { SMA_COLORS } from '../sma';
 
-const RANGES: { label: string; days: number; resolution: 'D' | '60' | '5'; approxCandles: number }[] = [
-  { label: '1D', days: 1, resolution: '5', approxCandles: 78 },
-  { label: '5D', days: 5, resolution: '60', approxCandles: 33 },
-  { label: '1M', days: 30, resolution: 'D', approxCandles: 30 },
-  { label: '6M', days: 180, resolution: 'D', approxCandles: 180 },
+// A top-down set: check the big trend on a high timeframe first (Monthly/
+// Weekly), then narrow down to Daily/1H/15m for entry timing -- same
+// contract, same chart, just zooming in. Weekly/Monthly and 15m aren't
+// resolutions the server speaks natively, so they're rolled up client-side
+// from the daily/5-min series it does provide.
+interface RangeDef {
+  label: string;
+  days: number;
+  resolution: 'D' | '60' | '5';
+  approxCandles: number;
+  aggregate?: (candles: Candle[]) => Candle[];
+}
+
+const RANGES: RangeDef[] = [
+  { label: '15m', days: 2, resolution: '5', approxCandles: 52, aggregate: (c) => aggregateByCount(c, 3) },
+  { label: '1H', days: 10, resolution: '60', approxCandles: 65 },
+  { label: 'D', days: 180, resolution: 'D', approxCandles: 180 },
+  { label: 'W', days: 730, resolution: 'D', approxCandles: 104, aggregate: (c) => aggregateByCalendarPeriod(c, 'week') },
+  { label: 'M', days: 730, resolution: 'D', approxCandles: 24, aggregate: (c) => aggregateByCalendarPeriod(c, 'month') },
 ];
+
+const SMA_PERIODS = [20, 50];
 
 export function FuturesDetailPage() {
   const { symbol = '' } = useParams();
@@ -20,6 +38,7 @@ export function FuturesDetailPage() {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [projection, setProjection] = useState<Projection | null>(null);
   const [showProjection, setShowProjection] = useState(false);
+  const [smaPeriods, setSmaPeriods] = useState<number[]>([20, 50]);
   const [account, setAccount] = useState<FuturesAccount | null>(null);
   const [rangeIndex, setRangeIndex] = useState(2);
   const [error, setError] = useState<string | null>(null);
@@ -50,11 +69,11 @@ export function FuturesDetailPage() {
   async function loadChart() {
     const lookback = Math.min(90, Math.max(8, Math.round(range.approxCandles * 0.25)));
     const forecastPeriods = Math.max(3, Math.round(lookback / 3));
-    const [c, proj] = await Promise.all([
+    const [rawCandles, proj] = await Promise.all([
       api.getCandles(symbol, range.resolution, range.days),
       api.getProjection(symbol, range.resolution, range.days, lookback, forecastPeriods),
     ]);
-    setCandles(c);
+    setCandles(range.aggregate ? range.aggregate(rawCandles) : rawCandles);
     setProjection(proj);
   }
 
@@ -75,6 +94,10 @@ export function FuturesDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, rangeIndex]);
 
+  function toggleSma(period: number) {
+    setSmaPeriods((prev) => (prev.includes(period) ? prev.filter((p) => p !== period) : [...prev, period].sort((a, b) => a - b)));
+  }
+
   if (error) {
     return (
       <div>
@@ -94,6 +117,7 @@ export function FuturesDetailPage() {
   }
 
   const position = account?.positions.find((p) => p.symbol === contract.symbol);
+  const livePl = position && quote ? (quote.price - position.avgPrice) * contract.multiplier * position.quantity : null;
 
   return (
     <div>
@@ -112,6 +136,24 @@ export function FuturesDetailPage() {
             </span>
           </div>
         )}
+        <div className="stat-row" style={{ marginTop: 10 }}>
+          <div className="stat">
+            <span className="label">Margin / Contract</span>
+            <span className="value">{formatCurrency(contract.approxMargin, 0)}</span>
+          </div>
+          <div className="stat">
+            <span className="label">Available Margin</span>
+            <span className="value">{formatCurrency(account?.availableMargin ?? 0, 0)}</span>
+          </div>
+          {position && (
+            <div className="stat">
+              <span className="label">Position P&amp;L</span>
+              <span className={`value ${changeClass(livePl ?? position.unrealizedPl)}`}>
+                {formatSigned(livePl ?? position.unrealizedPl)}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid-2">
@@ -125,41 +167,55 @@ export function FuturesDetailPage() {
                   </button>
                 ))}
               </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
-                <input
-                  type="checkbox"
-                  checked={showProjection}
-                  onChange={(e) => setShowProjection(e.target.checked)}
-                />
-                Trend projection
-              </label>
+              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                {SMA_PERIODS.map((period) => (
+                  <label key={period} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
+                    <input type="checkbox" checked={smaPeriods.includes(period)} onChange={() => toggleSma(period)} />
+                    SMA {period}
+                  </label>
+                ))}
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
+                  <input type="checkbox" checked={showProjection} onChange={(e) => setShowProjection(e.target.checked)} />
+                  Trend projection
+                </label>
+              </div>
             </div>
-            {showProjection && projection && (
+            {(smaPeriods.length > 0 || (showProjection && projection)) && (
               <div className="legend">
-                <span>
-                  <span className="legend-swatch" style={{ background: '#2f81f7' }} />
-                  Trendline (fitted)
-                </span>
-                <span>
-                  <span className="legend-swatch" style={{ background: '#e0a52c' }} />
-                  Projected ({projection.direction})
-                </span>
-                <span>
-                  <span className="legend-swatch" style={{ background: '#8b939d' }} />
-                  Trend channel
-                </span>
+                {smaPeriods.map((period) => (
+                  <span key={period}>
+                    <span className="legend-swatch" style={{ background: SMA_COLORS[period] ?? '#8b939d' }} />
+                    SMA {period}
+                  </span>
+                ))}
+                {showProjection && projection && (
+                  <>
+                    <span>
+                      <span className="legend-swatch" style={{ background: '#2f81f7' }} />
+                      Trendline (fitted)
+                    </span>
+                    <span>
+                      <span className="legend-swatch" style={{ background: '#e0a52c' }} />
+                      Projected ({projection.direction})
+                    </span>
+                    <span>
+                      <span className="legend-swatch" style={{ background: '#8b939d' }} />
+                      Trend channel
+                    </span>
+                  </>
+                )}
               </div>
             )}
             <Chart
               candles={candles}
               projection={projection}
               showProjection={showProjection}
-              smaPeriods={[]}
+              smaPeriods={smaPeriods}
               positionLine={
                 position
                   ? {
                       price: position.avgPrice,
-                      title: `${position.quantity > 0 ? 'LONG' : 'SHORT'} ${Math.abs(position.quantity)} @ ${position.avgPrice.toFixed(2)}`,
+                      title: `${position.quantity > 0 ? 'LONG' : 'SHORT'} ${Math.abs(position.quantity)} (${formatSigned(livePl ?? position.unrealizedPl)})`,
                     }
                   : null
               }
