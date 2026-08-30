@@ -15,6 +15,16 @@ import {
 } from './trading.js';
 import { getWatchlist, addToWatchlist, removeFromWatchlist } from './watchlist.js';
 import { getRecentAlerts, WATCHED_SYMBOLS } from './patternWatcher.js';
+import { FUTURES_CONTRACTS, getContract } from './futuresContracts.js';
+import {
+  buyFutures,
+  sellFutures,
+  getFuturesOrders,
+  getFuturesPositions,
+  getFuturesAccountSummary,
+  resetFuturesAccount,
+  FuturesTradingError,
+} from './futuresTrading.js';
 
 export const router = Router();
 
@@ -186,5 +196,66 @@ router.get('/alerts', (req, res) => {
 
 router.post('/account/reset', (_req, res) => {
   resetAccount();
+  res.json({ ok: true });
+});
+
+router.get('/futures/contracts', (_req, res) => {
+  res.json(FUTURES_CONTRACTS);
+});
+
+router.get('/futures/account', async (_req, res, next) => {
+  try {
+    const summary = getFuturesAccountSummary();
+    const positions = getFuturesPositions();
+    const quotes = await Promise.all(
+      positions.map((p) => marketData.getQuote(p.symbol).catch(() => null))
+    );
+    const enriched = positions.map((p, i) => {
+      const contract = getContract(p.symbol);
+      const quote = quotes[i];
+      const marketPrice = quote?.price ?? p.avgPrice;
+      const multiplier = contract?.multiplier ?? 0;
+      const unrealizedPl = (marketPrice - p.avgPrice) * multiplier * p.quantity;
+      return { ...p, marketPrice, unrealizedPl, contractName: contract?.name ?? p.symbol };
+    });
+    const totalUnrealizedPl = enriched.reduce((sum, p) => sum + p.unrealizedPl, 0);
+    res.json({
+      ...summary,
+      equity: summary.cash + totalUnrealizedPl,
+      totalUnrealizedPl,
+      positions: enriched,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/futures/orders', (_req, res) => {
+  res.json(getFuturesOrders());
+});
+
+router.post('/futures/orders', async (req, res, next) => {
+  try {
+    const symbol = String(req.body?.symbol ?? '').trim();
+    const side = String(req.body?.side ?? '').toUpperCase();
+    const quantity = Number(req.body?.quantity);
+    if (!symbol) return res.status(400).json({ error: 'symbol is required' });
+    if (!getContract(symbol)) return res.status(400).json({ error: `${symbol} isn't a tradeable futures contract` });
+    if (side !== 'BUY' && side !== 'SELL') return res.status(400).json({ error: 'side must be BUY or SELL' });
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return res.status(400).json({ error: 'quantity must be a positive whole number of contracts' });
+    }
+
+    const quote = await marketData.getQuote(symbol);
+    const order = side === 'BUY' ? buyFutures(symbol, quantity, quote.price) : sellFutures(symbol, quantity, quote.price);
+    res.json(order);
+  } catch (err) {
+    if (err instanceof FuturesTradingError) return res.status(400).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.post('/futures/account/reset', (_req, res) => {
+  resetFuturesAccount();
   res.json({ ok: true });
 });

@@ -93,6 +93,44 @@ export interface BracketOrder {
   filledLeg: 'TP' | 'SL' | null;
 }
 
+export interface FuturesContract {
+  symbol: string;
+  name: string;
+  group: string;
+  tickSize: number;
+  tickValue: number;
+  multiplier: number;
+  approxMargin: number;
+}
+
+export interface FuturesPosition {
+  symbol: string;
+  quantity: number; // signed: positive = long, negative = short
+  avgPrice: number;
+  marketPrice: number;
+  unrealizedPl: number;
+  contractName: string;
+}
+
+export interface FuturesAccount {
+  cash: number;
+  usedMargin: number;
+  availableMargin: number;
+  equity: number;
+  totalUnrealizedPl: number;
+  positions: FuturesPosition[];
+}
+
+export interface FuturesOrder {
+  id: number;
+  symbol: string;
+  side: 'BUY' | 'SELL';
+  quantity: number;
+  price: number;
+  realizedPl: number;
+  createdAt: string;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -149,4 +187,13 @@ export const api = {
       '/health'
     ),
   getAlerts: (limit = 50) => request<AlertsResponse>(`/alerts?limit=${limit}`),
+  getFuturesContracts: () => request<FuturesContract[]>('/futures/contracts'),
+  getFuturesAccount: () => request<FuturesAccount>('/futures/account'),
+  getFuturesOrders: () => request<FuturesOrder[]>('/futures/orders'),
+  placeFuturesOrder: (symbol: string, side: 'BUY' | 'SELL', quantity: number) =>
+    request<FuturesOrder>('/futures/orders', {
+      method: 'POST',
+      body: JSON.stringify({ symbol, side, quantity }),
+    }),
+  resetFuturesAccount: () => request<{ ok: boolean }>('/futures/account/reset', { method: 'POST' }),
 };

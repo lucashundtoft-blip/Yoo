@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, type Quote } from '../api';
 import { formatCurrency, formatPercent } from '../format';
+import { FuturesSubNav } from '../components/FuturesSubNav';
 
 interface FutureDef {
   symbol: string;
@@ -100,6 +101,7 @@ export function FuturesHeatmapPage() {
 
   return (
     <div>
+      <FuturesSubNav />
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ margin: 0 }}>Futures Heat Map</h2>
         <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>
@@ -138,7 +140,7 @@ export function FuturesHeatmapPage() {
                   return (
                     <div
                       key={f.symbol}
-                      onClick={() => navigate(`/replay/${f.symbol}`)}
+                      onClick={() => navigate(`/futures/${f.symbol}`)}
                       style={{
                         background: quote ? tileColor(quote.changePercent) : 'var(--bg-elevated)',
                         border: '1px solid var(--border)',
