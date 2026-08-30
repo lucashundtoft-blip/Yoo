@@ -15,7 +15,7 @@ import { computeSMA, SMA_COLORS } from '../sma';
 import { toHeikinAshi } from '../heikinAshi';
 import { computeTrendChannel } from '../projection';
 
-const BOLD_SMA_PERIODS = new Set([20, 200, 400]);
+const BOLD_SMA_PERIODS = new Set([20, 50, 200, 400]);
 
 export interface HoverBar {
   time: number;
@@ -195,8 +195,9 @@ export function Chart({
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: '#262b33' },
       timeScale: { borderColor: '#262b33', timeVisible: true },
-      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: true },
       handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
+      kineticScroll: { touch: true, mouse: false },
       width: containerRef.current.clientWidth,
       height: containerRef.current.clientHeight,
     });

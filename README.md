@@ -16,15 +16,73 @@ per-symbol random walks, so it works fully offline with no API key and never
 stops "trading," even when real markets are closed.
 
 To use real prices, get a free API key from [Finnhub](https://finnhub.io/register)
-and set it before starting the server:
+and/or [Financial Modeling Prep](https://financialmodelingprep.com/register)
+and set them before starting the server:
 
 ```bash
 export FINNHUB_API_KEY=your_key_here
+export FMP_API_KEY=your_key_here
 ```
 
-If the key is missing, invalid, rate-limited, or the network is unreachable,
-the app automatically falls back to simulated data per-request so it keeps
-working either way.
+If both are set, Finnhub is tried first and FMP is used as a fallback (useful
+since free-tier rate limits differ between the two). If a key is missing,
+invalid, rate-limited, or the network is unreachable, the app automatically
+falls back to the next provider (and ultimately to simulated data) per-request
+so it keeps working either way.
+
+### Futures data
+
+The [Futures Heat Map](client/src/pages/FuturesHeatmapPage.tsx) page is
+simulated by default, same as an unrecognized stock ticker. Real futures
+contract quotes (CME, etc.) aren't available for free from any provider we
+checked -- Alpha Vantage's live spot metals and FMP's commodities/futures
+endpoints both require a paid plan. The one real, free-tier source we found
+is Alpha Vantage's commodity benchmark data for crude oil, natural gas,
+copper, corn, and wheat:
+
+```bash
+export ALPHA_VANTAGE_API_KEY=your_key_here
+```
+
+With that key set, the `CL`, `NG`, `HG`, `ZC`, and `ZW` tiles use real daily
+prices (marked **Real (AV)** on the heat map) instead of simulated data; get
+a free key from
+[Alpha Vantage](https://www.alphavantage.co/support/#api-key). Note this is
+daily benchmark pricing, not a live intraday futures tick feed, and Alpha
+Vantage's free tier is rate-limited to ~25 requests/day, so results are
+cached for 6 hours per commodity.
+
+### Real intraday futures data (Databento)
+
+For actual CME Globex futures contracts at intraday resolution -- not a
+daily benchmark proxy -- the app can use [Databento](https://databento.com)'s
+Historical API (pay-as-you-go, no broker account needed; new accounts get a
+free credit to start):
+
+```bash
+export DATABENTO_API_KEY=your_key_here
+```
+
+With that key set, `MCL` (Micro WTI Crude), `MGC` (Micro Gold), and `SIL`
+(Micro Silver) on the heat map switch to real continuous-front-month data
+(marked **Real (Databento)**), taking priority over the Alpha Vantage proxy
+for `MCL` since it's the actual futures contract rather than a spot-price
+stand-in. The same feed also backs the [Pattern Alerts](client/src/pages/AlertsPage.tsx)
+page's price-vs-PVT divergence watcher for `MCL`, `MGC`, `SIL`, and `MHG`
+(Micro Copper) -- without this key, that watcher runs on simulated data and
+says so on the page.
+
+This uses Databento's Historical REST API polled on a cache (20s for
+1-minute bars, longer for coarser resolutions), not their low-latency Live
+streaming gateway, so treat it as "recent" rather than tick-by-tick live.
+Because Databento bills by data volume, the cache exists specifically to
+keep the app's own polling (an 8s quote refresh on an open stock page, a 15s
+bracket-order check, a 60s pattern-alert check) from turning into constant
+billed requests.
+
+Metals other than gold/silver and every stock-index future (ES, NQ, RTY,
+etc.) have no free or wired-up real data source, so those stay simulated
+regardless of which keys are set.
 
 ## Indicators
 

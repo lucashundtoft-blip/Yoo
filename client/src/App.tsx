@@ -7,6 +7,10 @@ import { OrdersPage } from './pages/OrdersPage';
 import { ReplayPage } from './pages/ReplayPage';
 import { TrendGamePage } from './pages/TrendGamePage';
 import { FuturesHeatmapPage } from './pages/FuturesHeatmapPage';
+import { FuturesDetailPage } from './pages/FuturesDetailPage';
+import { FuturesPortfolioPage } from './pages/FuturesPortfolioPage';
+import { FuturesOrdersPage } from './pages/FuturesOrdersPage';
+import { AlertsPage } from './pages/AlertsPage';
 
 function App() {
   return (
@@ -23,6 +27,10 @@ function App() {
             <Route path="/replay/:symbol" element={<ReplayPage />} />
             <Route path="/replay/:symbol/game" element={<TrendGamePage />} />
             <Route path="/futures" element={<FuturesHeatmapPage />} />
+            <Route path="/futures/:symbol" element={<FuturesDetailPage />} />
+            <Route path="/futures-portfolio" element={<FuturesPortfolioPage />} />
+            <Route path="/futures-orders" element={<FuturesOrdersPage />} />
+            <Route path="/alerts" element={<AlertsPage />} />
           </Routes>
         </main>
       </div>

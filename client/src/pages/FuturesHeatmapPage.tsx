@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, type Quote } from '../api';
 import { formatCurrency, formatPercent } from '../format';
+import { FuturesSubNav } from '../components/FuturesSubNav';
 
 interface FutureDef {
   symbol: string;
@@ -9,19 +10,32 @@ interface FutureDef {
   group: string;
 }
 
-// A real futures feed isn't available (Finnhub's free tier is equities-only),
-// so these prices come from the same deterministic simulated provider used
-// for unrecognized stock tickers — clearly labeled below, not presented as live.
+// CL, NG, HG, ZC, and ZW use real Alpha Vantage commodity data when
+// ALPHA_VANTAGE_API_KEY is set on the server (see README). MCL, MGC, and SIL
+// use real Databento CME Globex data when DATABENTO_API_KEY is set --
+// Databento takes priority for MCL since it's the actual futures contract,
+// not Alpha Vantage's spot-price proxy. Everything else -- other metals and
+// every stock-index future -- has no free-tier data source we could find, so
+// those (and everything, if no key is set) fall back to the same
+// deterministic simulated provider used for unrecognized stock tickers.
+const ALPHA_VANTAGE_SYMBOLS = new Set(['CL', 'NG', 'HG', 'ZC', 'ZW']);
+const DATABENTO_SYMBOLS = new Set(['MCL', 'MGC', 'SIL']);
+
 const FUTURES: FutureDef[] = [
   { symbol: 'ES', name: 'E-mini S&P 500', group: 'Indices' },
+  { symbol: 'MES', name: 'Micro E-mini S&P 500', group: 'Indices' },
   { symbol: 'NQ', name: 'E-mini Nasdaq 100', group: 'Indices' },
+  { symbol: 'MNQ', name: 'Micro E-mini Nasdaq 100', group: 'Indices' },
   { symbol: 'YM', name: 'E-mini Dow', group: 'Indices' },
   { symbol: 'RTY', name: 'E-mini Russell 2000', group: 'Indices' },
   { symbol: 'CL', name: 'Crude Oil', group: 'Energy' },
+  { symbol: 'MCL', name: 'Micro WTI Crude Oil', group: 'Energy' },
   { symbol: 'NG', name: 'Natural Gas', group: 'Energy' },
   { symbol: 'RB', name: 'RBOB Gasoline', group: 'Energy' },
   { symbol: 'GC', name: 'Gold', group: 'Metals' },
+  { symbol: 'MGC', name: 'Micro Gold', group: 'Metals' },
   { symbol: 'SI', name: 'Silver', group: 'Metals' },
+  { symbol: 'SIL', name: 'Micro Silver', group: 'Metals' },
   { symbol: 'HG', name: 'Copper', group: 'Metals' },
   { symbol: 'ZB', name: '30-Year T-Bond', group: 'Rates' },
   { symbol: 'ZN', name: '10-Year T-Note', group: 'Rates' },
@@ -47,6 +61,8 @@ export function FuturesHeatmapPage() {
   const navigate = useNavigate();
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [loading, setLoading] = useState(true);
+  const [hasCommodityData, setHasCommodityData] = useState(false);
+  const [hasFuturesData, setHasFuturesData] = useState(false);
 
   async function load() {
     const entries = await Promise.all(
@@ -67,6 +83,16 @@ export function FuturesHeatmapPage() {
   }
 
   useEffect(() => {
+    api
+      .getHealth()
+      .then((h) => {
+        setHasCommodityData(h.hasCommodityData);
+        setHasFuturesData(h.hasFuturesData);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     load();
     const interval = setInterval(load, 10_000);
     return () => clearInterval(interval);
@@ -75,11 +101,24 @@ export function FuturesHeatmapPage() {
 
   return (
     <div>
+      <FuturesSubNav />
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ margin: 0 }}>Futures Heat Map</h2>
         <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>
-          Simulated prices — no live futures feed is configured, so tiles use the same deterministic
-          practice data as an unrecognized stock ticker. For layout/practice only, not real market data.
+          {hasFuturesData && (
+            <>
+              Tiles marked <strong>Real (Databento)</strong> use live CME Globex data for the actual futures
+              contract.{' '}
+            </>
+          )}
+          {hasCommodityData && (
+            <>
+              Tiles marked <strong>Real (AV)</strong> use Alpha Vantage commodity benchmark data.{' '}
+            </>
+          )}
+          {!hasFuturesData && !hasCommodityData && 'All prices are simulated — see README for setup. '}
+          Everything else — other metals and every stock-index future — has no free-tier data source we
+          could find, so those stay simulated regardless.
         </div>
       </div>
 
@@ -101,7 +140,7 @@ export function FuturesHeatmapPage() {
                   return (
                     <div
                       key={f.symbol}
-                      onClick={() => navigate(`/replay/${f.symbol}`)}
+                      onClick={() => navigate(`/futures/${f.symbol}`)}
                       style={{
                         background: quote ? tileColor(quote.changePercent) : 'var(--bg-elevated)',
                         border: '1px solid var(--border)',
@@ -110,7 +149,26 @@ export function FuturesHeatmapPage() {
                         cursor: 'pointer',
                       }}
                     >
-                      <div style={{ fontWeight: 800, fontSize: 16 }}>{f.symbol}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ fontWeight: 800, fontSize: 16 }}>{f.symbol}</div>
+                        {((hasFuturesData && DATABENTO_SYMBOLS.has(f.symbol)) ||
+                          (hasCommodityData && ALPHA_VANTAGE_SYMBOLS.has(f.symbol))) && (
+                          <span
+                            style={{
+                              fontSize: 9,
+                              fontWeight: 700,
+                              letterSpacing: 0.4,
+                              textTransform: 'uppercase',
+                              color: 'var(--green)',
+                              border: '1px solid var(--green)',
+                              borderRadius: 4,
+                              padding: '1px 4px',
+                            }}
+                          >
+                            Real
+                          </span>
+                        )}
+                      </div>
                       <div style={{ fontSize: 11, color: 'rgba(230,233,237,0.75)', marginBottom: 8 }}>{f.name}</div>
                       {quote ? (
                         <>
