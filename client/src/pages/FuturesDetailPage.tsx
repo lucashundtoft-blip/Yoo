@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import type { IChartApi } from 'lightweight-charts';
 import { api, type Candle, type FuturesAccount, type FuturesContract, type Projection, type Quote } from '../api';
 import { Chart, type HoverBar } from '../components/Chart';
+import { PvtChart } from '../components/PvtChart';
 import { FuturesOrderPanel } from '../components/FuturesOrderPanel';
 import { FuturesSubNav } from '../components/FuturesSubNav';
 import { aggregateByCount, aggregateByCalendarPeriod } from '../aggregateCandles';
 import { formatCurrency, formatPercent, formatSigned, changeClass } from '../format';
-import { SMA_COLORS } from '../sma';
+import { SMA_COLORS, computeSMA } from '../sma';
 
 // A top-down set: check the big trend on a high timeframe first (Monthly/
 // Weekly), then narrow down to Daily/1H/15m for entry timing -- same
@@ -43,6 +45,8 @@ export function FuturesDetailPage() {
   const [rangeIndex, setRangeIndex] = useState(2);
   const [error, setError] = useState<string | null>(null);
   const [hoverBar, setHoverBar] = useState<HoverBar | null>(null);
+  const [showPvt, setShowPvt] = useState(false);
+  const [mainChartApi, setMainChartApi] = useState<IChartApi | null>(null);
 
   const range = RANGES[rangeIndex];
 
@@ -188,6 +192,10 @@ export function FuturesDetailPage() {
                   <input type="checkbox" checked={showProjection} onChange={(e) => setShowProjection(e.target.checked)} />
                   Trend projection
                 </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
+                  <input type="checkbox" checked={showPvt} onChange={(e) => setShowPvt(e.target.checked)} />
+                  PVT
+                </label>
               </div>
             </div>
             {displayBar && (
@@ -204,12 +212,17 @@ export function FuturesDetailPage() {
             )}
             {(smaPeriods.length > 0 || (showProjection && projection)) && (
               <div className="legend">
-                {smaPeriods.map((period) => (
-                  <span key={period}>
-                    <span className="legend-swatch" style={{ background: SMA_COLORS[period] ?? '#8b939d' }} />
-                    SMA {period}
-                  </span>
-                ))}
+                {smaPeriods.map((period) => {
+                  const series = computeSMA(candles, period);
+                  const latestValue = series[series.length - 1]?.value;
+                  return (
+                    <span key={period} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      <span className="legend-swatch" style={{ background: SMA_COLORS[period] ?? '#8b939d' }} />
+                      SMA {period}
+                      {latestValue != null && `: ${formatCurrency(latestValue)}`}
+                    </span>
+                  );
+                })}
                 {showProjection && projection && (
                   <>
                     <span>
@@ -234,6 +247,7 @@ export function FuturesDetailPage() {
               showProjection={showProjection}
               smaPeriods={smaPeriods}
               onHoverBar={setHoverBar}
+              onChartApi={setMainChartApi}
               positionLine={
                 position
                   ? {
@@ -244,6 +258,12 @@ export function FuturesDetailPage() {
               }
             />
           </div>
+
+          {showPvt && (
+            <div className="card" style={{ marginBottom: 20 }}>
+              <PvtChart candles={candles} mainChart={mainChartApi} />
+            </div>
+          )}
         </div>
 
         <FuturesOrderPanel
