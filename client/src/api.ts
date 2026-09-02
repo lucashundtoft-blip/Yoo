@@ -197,9 +197,13 @@ export const api = {
   cancelBracket: (id: number) => request<{ ok: boolean }>(`/brackets/${id}`, { method: 'DELETE' }),
   resetAccount: () => request<{ ok: boolean }>('/account/reset', { method: 'POST' }),
   getHealth: () =>
-    request<{ ok: boolean; dataProvider: string; hasCommodityData: boolean; hasFuturesData: boolean }>(
-      '/health'
-    ),
+    request<{
+      ok: boolean;
+      dataProvider: string;
+      hasCommodityData: boolean;
+      hasFuturesData: boolean;
+      hasYahooFuturesData: boolean;
+    }>('/health'),
   getAlerts: (limit = 50) => request<AlertsResponse>(`/alerts?limit=${limit}`),
   getFuturesContracts: () => request<FuturesContract[]>('/futures/contracts'),
   getFuturesAccount: () => request<FuturesAccount>('/futures/account'),
