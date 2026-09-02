@@ -66,6 +66,85 @@ export interface Order {
   createdAt: string;
 }
 
+export interface PatternAlert {
+  id: number;
+  symbol: string;
+  kind: 'BULLISH_DIVERGENCE' | 'BEARISH_DIVERGENCE';
+  price: number;
+  priceChangePercent: number;
+  createdAt: string;
+}
+
+export interface AlertsResponse {
+  symbols: string[];
+  alerts: PatternAlert[];
+}
+
+export interface BracketOrder {
+  id: number;
+  symbol: string;
+  quantity: number;
+  takeProfitPrice: number | null;
+  stopLossPrice: number | null;
+  status: 'ACTIVE' | 'FILLED' | 'CANCELLED';
+  createdAt: string;
+  filledAt: string | null;
+  filledPrice: number | null;
+  filledLeg: 'TP' | 'SL' | null;
+}
+
+export interface FuturesContract {
+  symbol: string;
+  name: string;
+  group: string;
+  tickSize: number;
+  tickValue: number;
+  multiplier: number;
+  approxMargin: number;
+}
+
+export interface FuturesPosition {
+  symbol: string;
+  quantity: number; // signed: positive = long, negative = short
+  avgPrice: number;
+  marketPrice: number;
+  unrealizedPl: number;
+  contractName: string;
+}
+
+export interface FuturesAccount {
+  cash: number;
+  usedMargin: number;
+  availableMargin: number;
+  equity: number;
+  totalUnrealizedPl: number;
+  positions: FuturesPosition[];
+}
+
+export interface FuturesOrder {
+  id: number;
+  symbol: string;
+  side: 'BUY' | 'SELL';
+  quantity: number;
+  price: number;
+  realizedPl: number;
+  createdAt: string;
+}
+
+export interface FuturesBracketOrder {
+  id: number;
+  symbol: string;
+  side: 'BUY' | 'SELL'; // side of the entry: BUY=long, SELL=short
+  quantity: number;
+  takeProfitPrice: number | null;
+  stopLossPrice: number | null;
+  status: 'ACTIVE' | 'FILLED' | 'CANCELLED';
+  createdAt: string;
+  filledAt: string | null;
+  filledPrice: number | null;
+  filledLeg: 'TP' | 'SL' | null;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -102,7 +181,46 @@ export const api = {
     request<string[]>(`/watchlist/${encodeURIComponent(symbol)}`, { method: 'DELETE' }),
   getPortfolio: () => request<Portfolio>('/portfolio'),
   getOrders: () => request<Order[]>('/orders'),
-  placeOrder: (symbol: string, side: 'BUY' | 'SELL', quantity: number) =>
-    request<Order>('/orders', { method: 'POST', body: JSON.stringify({ symbol, side, quantity }) }),
+  placeOrder: (
+    symbol: string,
+    side: 'BUY' | 'SELL',
+    quantity: number,
+    takeProfitPrice?: number | null,
+    stopLossPrice?: number | null
+  ) =>
+    request<Order>('/orders', {
+      method: 'POST',
+      body: JSON.stringify({ symbol, side, quantity, takeProfitPrice, stopLossPrice }),
+    }),
+  getBrackets: (symbol?: string) =>
+    request<BracketOrder[]>(`/brackets${symbol ? `?symbol=${encodeURIComponent(symbol)}` : ''}`),
+  cancelBracket: (id: number) => request<{ ok: boolean }>(`/brackets/${id}`, { method: 'DELETE' }),
   resetAccount: () => request<{ ok: boolean }>('/account/reset', { method: 'POST' }),
+  getHealth: () =>
+    request<{
+      ok: boolean;
+      dataProvider: string;
+      hasCommodityData: boolean;
+      hasFuturesData: boolean;
+      hasYahooFuturesData: boolean;
+    }>('/health'),
+  getAlerts: (limit = 50) => request<AlertsResponse>(`/alerts?limit=${limit}`),
+  getFuturesContracts: () => request<FuturesContract[]>('/futures/contracts'),
+  getFuturesAccount: () => request<FuturesAccount>('/futures/account'),
+  getFuturesOrders: () => request<FuturesOrder[]>('/futures/orders'),
+  placeFuturesOrder: (
+    symbol: string,
+    side: 'BUY' | 'SELL',
+    quantity: number,
+    takeProfitPrice?: number | null,
+    stopLossPrice?: number | null
+  ) =>
+    request<FuturesOrder>('/futures/orders', {
+      method: 'POST',
+      body: JSON.stringify({ symbol, side, quantity, takeProfitPrice, stopLossPrice }),
+    }),
+  getFuturesBrackets: (symbol?: string) =>
+    request<FuturesBracketOrder[]>(`/futures/brackets${symbol ? `?symbol=${encodeURIComponent(symbol)}` : ''}`),
+  cancelFuturesBracket: (id: number) => request<{ ok: boolean }>(`/futures/brackets/${id}`, { method: 'DELETE' }),
+  resetFuturesAccount: () => request<{ ok: boolean }>('/futures/account/reset', { method: 'POST' }),
 };

@@ -15,7 +15,7 @@ import { computeSMA, SMA_COLORS } from '../sma';
 import { toHeikinAshi } from '../heikinAshi';
 import { computeTrendChannel } from '../projection';
 
-const BOLD_SMA_PERIODS = new Set([20, 200, 400]);
+const BOLD_SMA_PERIODS = new Set([20, 50, 200, 400]);
 
 export interface HoverBar {
   time: number;
@@ -34,6 +34,7 @@ export interface TradeMarker {
 export interface PositionLine {
   price: number;
   title: string;
+  color?: string;
 }
 
 interface ChartProps {
@@ -54,6 +55,9 @@ interface ChartProps {
   /** A labeled horizontal line at the average cost of an open position,
    *  like Webull's "POS: qty @ price" line. Omit/null to hide. */
   positionLine?: PositionLine | null;
+  /** Additional labeled horizontal lines (e.g. a prediction target vs. the
+   *  actual outcome in the trend-projection game). Replaces entirely on change. */
+  extraPriceLines?: PositionLine[];
   /** CSS height for the chart's container — lets the page fit the chart to
    *  the viewport (e.g. clamp() so it never needs scrolling on mobile).
    *  Falls back to a fixed 560px when omitted. */
@@ -78,6 +82,7 @@ export function Chart({
   tickAnimationMs,
   tradeMarkers,
   positionLine,
+  extraPriceLines,
   height,
 }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -90,6 +95,7 @@ export function Chart({
   const channelLowerSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const smaSeriesRef = useRef<Map<number, ISeriesApi<'Line'>>>(new Map());
   const positionPriceLineRef = useRef<IPriceLine | null>(null);
+  const extraPriceLinesRef = useRef<IPriceLine[]>([]);
   const candlesRef = useRef<Candle[]>(candles);
   const onHoverBarRef = useRef(onHoverBar);
   const prevCandlesInfoRef = useRef<{ length: number; lastTime: number | null; heikinAshi: boolean }>({
@@ -189,8 +195,9 @@ export function Chart({
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: '#262b33' },
       timeScale: { borderColor: '#262b33', timeVisible: true },
-      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
+      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: true },
       handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
+      kineticScroll: { touch: true, mouse: false },
       width: containerRef.current.clientWidth,
       height: containerRef.current.clientHeight,
     });
@@ -430,6 +437,36 @@ export function Chart({
       });
     }
   }, [positionLine]);
+
+  useEffect(() => {
+    const candleSeries = candleSeriesRef.current;
+    if (!candleSeries) return;
+    for (const line of extraPriceLinesRef.current) candleSeries.removePriceLine(line);
+    extraPriceLinesRef.current = (extraPriceLines ?? []).map((l) =>
+      candleSeries.createPriceLine({
+        price: l.price,
+        color: l.color ?? '#e0a52c',
+        lineWidth: 2,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: l.title,
+      })
+    );
+
+    // Price lines don't factor into the series' default autoscale, so a
+    // target far from the visible candles would render off-canvas. Widen
+    // the scale to include them.
+    const extraValues = (extraPriceLines ?? []).map((l) => l.price);
+    candleSeries.applyOptions({
+      autoscaleInfoProvider: (original: () => { priceRange: { minValue: number; maxValue: number } } | null) => {
+        const res = original();
+        if (!res?.priceRange || extraValues.length === 0) return res;
+        const minValue = Math.min(res.priceRange.minValue, ...extraValues);
+        const maxValue = Math.max(res.priceRange.maxValue, ...extraValues);
+        return { ...res, priceRange: { minValue, maxValue } };
+      },
+    });
+  }, [extraPriceLines]);
 
   return <div ref={containerRef} style={{ height: height ?? '560px', width: '100%' }} />;
 }

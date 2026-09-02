@@ -5,7 +5,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import './db.js';
 import { router } from './routes.js';
-import { marketData } from './marketData/index.js';
+import { marketData, hasCommodityData, hasFuturesData, hasYahooFuturesData } from './marketData/index.js';
+import { checkBrackets } from './trading.js';
+import { checkFuturesBrackets } from './futuresTrading.js';
+import { checkPatterns } from './patternWatcher.js';
 
 const app = express();
 app.use(cors());
@@ -14,7 +17,7 @@ app.use(express.json());
 app.use('/api', router);
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, dataProvider: marketData.name });
+  res.json({ ok: true, dataProvider: marketData.name, hasCommodityData, hasFuturesData, hasYahooFuturesData });
 });
 
 // In production (single-service deploys like Render), serve the built client
@@ -38,3 +41,19 @@ const PORT = Number(process.env.PORT) || 4000;
 app.listen(PORT, () => {
   console.log(`Yoo trading sim server listening on :${PORT} (data: ${marketData.name})`);
 });
+
+const BRACKET_CHECK_INTERVAL_MS = 15_000;
+setInterval(() => {
+  checkBrackets((symbol) => marketData.getQuote(symbol).then((q) => q.price)).catch((err) => {
+    console.error('Bracket check failed:', err);
+  });
+  checkFuturesBrackets((symbol) => marketData.getQuote(symbol).then((q) => q.price)).catch((err) => {
+    console.error('Futures bracket check failed:', err);
+  });
+}, BRACKET_CHECK_INTERVAL_MS);
+
+const PATTERN_CHECK_INTERVAL_MS = 60_000;
+setInterval(() => {
+  checkPatterns().catch((err) => console.error('Pattern check failed:', err));
+}, PATTERN_CHECK_INTERVAL_MS);
+checkPatterns().catch((err) => console.error('Pattern check failed:', err));

@@ -22,3 +22,14 @@ export function changeClass(value: number): 'up' | 'down' | 'flat' {
   if (value < 0) return 'down';
   return 'flat';
 }
+
+/** Compact K/M/B abbreviation for large unitless numbers, e.g. a PVT value
+ * -- matches how trading apps display cumulative volume-weighted figures. */
+export function formatCompact(value: number): string {
+  const sign = value < 0 ? '-' : '';
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000_000) return `${sign}${(abs / 1_000_000_000).toFixed(2)}B`;
+  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(2)}K`;
+  return `${sign}${abs.toFixed(2)}`;
+}

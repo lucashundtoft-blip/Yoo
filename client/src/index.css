@@ -394,7 +394,8 @@ tbody tr:hover {
   margin-bottom: 12px;
 }
 
-.tabs button {
+.tabs button,
+.tabs a {
   padding: 8px 14px;
   border-radius: 8px;
   border: 1px solid transparent;
@@ -402,9 +403,11 @@ tbody tr:hover {
   color: var(--text-dim);
   font-size: 13px;
   font-weight: 600;
+  text-decoration: none;
 }
 
-.tabs button.active {
+.tabs button.active,
+.tabs a.active {
   background: var(--bg-hover);
   color: var(--text);
   border-color: var(--border);

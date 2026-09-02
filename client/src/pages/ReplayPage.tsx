@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { IChartApi } from 'lightweight-charts';
 import { api, type Candle } from '../api';
 import { Chart, type HoverBar, type TradeMarker, type PositionLine } from '../components/Chart';
@@ -256,7 +256,8 @@ export function ReplayPage() {
             </div>
           )}
           <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>
-            Practice on past price action, bar by bar, with a fresh {formatCurrency(SESSION_CASH, 0)} practice account per session.
+            Practice on past price action, bar by bar, with a fresh {formatCurrency(SESSION_CASH, 0)} practice account per session.{' '}
+            <Link to={`/replay/${activeSymbol}/game`}>🎯 Practice trend projection →</Link>
           </div>
         </div>
         <div>
