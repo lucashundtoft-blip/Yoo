@@ -14,12 +14,23 @@ interface FutureDef {
 // ALPHA_VANTAGE_API_KEY is set on the server (see README). MCL, MGC, and SIL
 // use real Databento CME Globex data when DATABENTO_API_KEY is set --
 // Databento takes priority for MCL since it's the actual futures contract,
-// not Alpha Vantage's spot-price proxy. Everything else -- other metals and
-// every stock-index future -- has no free-tier data source we could find, so
-// those (and everything, if no key is set) fall back to the same
-// deterministic simulated provider used for unrecognized stock tickers.
+// not Alpha Vantage's spot-price proxy. Every symbol on this page also has a
+// Yahoo Finance fallback (free, no key, but an unofficial/undocumented
+// endpoint -- can rate-limit or break without notice), tried when the
+// paid-key providers above don't cover a symbol or aren't configured.
 const ALPHA_VANTAGE_SYMBOLS = new Set(['CL', 'NG', 'HG', 'ZC', 'ZW']);
 const DATABENTO_SYMBOLS = new Set(['MCL', 'MGC', 'SIL']);
+const YAHOO_SYMBOLS = new Set([
+  'ES', 'MES', 'NQ', 'MNQ', 'YM', 'RTY', 'CL', 'MCL', 'NG', 'RB', 'GC', 'MGC',
+  'SI', 'SIL', 'HG', 'ZB', 'ZN', 'ZC', 'ZS', 'ZW', '6E', '6J', '6B',
+]);
+
+function realDataLabel(symbol: string, hasFuturesData: boolean, hasCommodityData: boolean, hasYahooFuturesData: boolean): string | null {
+  if (hasFuturesData && DATABENTO_SYMBOLS.has(symbol)) return 'Real (Databento)';
+  if (hasCommodityData && ALPHA_VANTAGE_SYMBOLS.has(symbol)) return 'Real (AV)';
+  if (hasYahooFuturesData && YAHOO_SYMBOLS.has(symbol)) return 'Real (Yahoo)';
+  return null;
+}
 
 const FUTURES: FutureDef[] = [
   { symbol: 'ES', name: 'E-mini S&P 500', group: 'Indices' },
@@ -63,6 +74,7 @@ export function FuturesHeatmapPage() {
   const [loading, setLoading] = useState(true);
   const [hasCommodityData, setHasCommodityData] = useState(false);
   const [hasFuturesData, setHasFuturesData] = useState(false);
+  const [hasYahooFuturesData, setHasYahooFuturesData] = useState(false);
 
   async function load() {
     const entries = await Promise.all(
@@ -88,6 +100,7 @@ export function FuturesHeatmapPage() {
       .then((h) => {
         setHasCommodityData(h.hasCommodityData);
         setHasFuturesData(h.hasFuturesData);
+        setHasYahooFuturesData(h.hasYahooFuturesData);
       })
       .catch(() => {});
   }, []);
@@ -107,18 +120,21 @@ export function FuturesHeatmapPage() {
         <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 4 }}>
           {hasFuturesData && (
             <>
-              Tiles marked <strong>Real (Databento)</strong> use live CME Globex data for the actual futures
-              contract.{' '}
+              <strong>Real (Databento)</strong> = live CME Globex data for the actual contract.{' '}
             </>
           )}
           {hasCommodityData && (
             <>
-              Tiles marked <strong>Real (AV)</strong> use Alpha Vantage commodity benchmark data.{' '}
+              <strong>Real (AV)</strong> = Alpha Vantage commodity benchmark data.{' '}
             </>
           )}
-          {!hasFuturesData && !hasCommodityData && 'All prices are simulated — see README for setup. '}
-          Everything else — other metals and every stock-index future — has no free-tier data source we
-          could find, so those stay simulated regardless.
+          {hasYahooFuturesData && (
+            <>
+              <strong>Real (Yahoo)</strong> = free Yahoo Finance data, no key needed, but an
+              unofficial/undocumented feed that can rate-limit or break without notice.{' '}
+            </>
+          )}
+          A tile still shows simulated data if every real source above fails for that request.
         </div>
       </div>
 
@@ -137,6 +153,7 @@ export function FuturesHeatmapPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
                 {items.map((f) => {
                   const quote = quotes[f.symbol];
+                  const badge = realDataLabel(f.symbol, hasFuturesData, hasCommodityData, hasYahooFuturesData);
                   return (
                     <div
                       key={f.symbol}
@@ -151,8 +168,7 @@ export function FuturesHeatmapPage() {
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <div style={{ fontWeight: 800, fontSize: 16 }}>{f.symbol}</div>
-                        {((hasFuturesData && DATABENTO_SYMBOLS.has(f.symbol)) ||
-                          (hasCommodityData && ALPHA_VANTAGE_SYMBOLS.has(f.symbol))) && (
+                        {badge && (
                           <span
                             style={{
                               fontSize: 9,
@@ -165,7 +181,7 @@ export function FuturesHeatmapPage() {
                               padding: '1px 4px',
                             }}
                           >
-                            Real
+                            {badge}
                           </span>
                         )}
                       </div>

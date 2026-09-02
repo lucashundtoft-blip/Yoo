@@ -4,6 +4,7 @@ import { FmpProvider } from './fmpProvider.js';
 import { SimulatedProvider } from './simulatedProvider.js';
 import { AlphaVantageCommodityProvider, COMMODITY_SYMBOL_MAP } from './commodityProvider.js';
 import { DatabentoProvider, DATABENTO_SYMBOL_MAP } from './databentoProvider.js';
+import { YahooFuturesProvider, YAHOO_FUTURES_SYMBOL_MAP } from './yahooFuturesProvider.js';
 
 const simulated = new SimulatedProvider();
 
@@ -22,6 +23,8 @@ const liveProviders: MarketDataProvider[] = candidateProviders.filter(
 
 const commodityProvider = alphaVantageKey ? new AlphaVantageCommodityProvider(alphaVantageKey) : null;
 const databentoProvider = databentoKey ? new DatabentoProvider(databentoKey) : null;
+// No key needed -- free, unofficial Yahoo Finance endpoint. Always on.
+const yahooFuturesProvider = new YahooFuturesProvider();
 
 /** Tries each live provider in order, falling back to simulated data if all
  * of them error out or return empty (no network, bad key, rate limit) so the
@@ -80,10 +83,13 @@ const stockProvider = new FallbackProvider();
  *    for MCL since it's the actual futures contract, not a spot-price proxy.
  * 2. Alpha Vantage commodities (CL, MCL, NG, HG, ZC, ZW) when
  *    ALPHA_VANTAGE_API_KEY is set.
- * 3. Simulated, for everything else (metals other than MGC/SIL, and every
- *    stock-index future -- no free-tier source exists for those). */
+ * 3. Yahoo Finance (all 24 futures symbols) -- free, no key required, but an
+ *    unofficial/undocumented endpoint that can rate-limit or break without
+ *    notice. Tried before simulated for anything the two paid-key providers
+ *    above didn't cover or don't have a key for.
+ * 4. Simulated, if every real source above failed or isn't configured. */
 class RoutingProvider implements MarketDataProvider {
-  readonly name = [databentoProvider?.name, commodityProvider?.name, stockProvider.name]
+  readonly name = [databentoProvider?.name, commodityProvider?.name, yahooFuturesProvider.name, stockProvider.name]
     .filter(Boolean)
     .join(' + ');
 
@@ -93,6 +99,10 @@ class RoutingProvider implements MarketDataProvider {
 
   private isCommoditySymbol(symbol: string): boolean {
     return symbol.toUpperCase() in COMMODITY_SYMBOL_MAP;
+  }
+
+  private isYahooFuturesSymbol(symbol: string): boolean {
+    return symbol.toUpperCase() in YAHOO_FUTURES_SYMBOL_MAP;
   }
 
   async search(query: string): Promise<SearchResult[]> {
@@ -111,6 +121,14 @@ class RoutingProvider implements MarketDataProvider {
     if (commodityProvider && this.isCommoditySymbol(symbol)) {
       try {
         const quote = await commodityProvider.getQuote(symbol);
+        if (quote.price) return quote;
+      } catch {
+        // fall through
+      }
+    }
+    if (this.isYahooFuturesSymbol(symbol)) {
+      try {
+        const quote = await yahooFuturesProvider.getQuote(symbol);
         if (quote.price) return quote;
       } catch {
         // fall through to simulated via the stock chain
@@ -133,6 +151,14 @@ class RoutingProvider implements MarketDataProvider {
         const candles = await commodityProvider.getCandles(symbol, resolution, days);
         if (candles.length > 0) return candles;
       } catch {
+        // fall through
+      }
+    }
+    if (this.isYahooFuturesSymbol(symbol)) {
+      try {
+        const candles = await yahooFuturesProvider.getCandles(symbol, resolution, days);
+        if (candles.length > 0) return candles;
+      } catch {
         // fall through to simulated via the stock chain
       }
     }
@@ -143,4 +169,5 @@ class RoutingProvider implements MarketDataProvider {
 export const marketData: MarketDataProvider = new RoutingProvider();
 export const hasCommodityData = commodityProvider !== null;
 export const hasFuturesData = databentoProvider !== null;
+export const hasYahooFuturesData = true;
 export type { Candle, Quote, Resolution, SearchResult, MarketDataProvider };
