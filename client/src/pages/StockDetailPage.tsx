@@ -5,7 +5,7 @@ import { api, type Candle, type Portfolio, type Projection, type Quote } from '.
 import { Chart } from '../components/Chart';
 import { RsiChart } from '../components/RsiChart';
 import { OrderPanel } from '../components/OrderPanel';
-import { formatCurrency, formatPercent, changeClass } from '../format';
+import { formatCurrency, formatPercent, formatSigned, changeClass } from '../format';
 import { SMA_COLORS } from '../sma';
 
 const AVAILABLE_SMA_PERIODS = [20, 200, 400];
@@ -111,10 +111,12 @@ export function StockDetailPage() {
             </button>
           </div>
           {quote && (
-            <div style={{ marginTop: 8, display: 'flex', alignItems: 'baseline', gap: 12 }}>
-              <span style={{ fontSize: 32, fontWeight: 700 }}>{formatCurrency(quote.price)}</span>
-              <span className={changeClass(quote.change)} style={{ fontSize: 16, fontWeight: 600 }}>
-                {formatCurrency(quote.change)} ({formatPercent(quote.changePercent)})
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span className="num" style={{ fontSize: 34, fontWeight: 700 }}>
+                {formatCurrency(quote.price)}
+              </span>
+              <span className={`change-badge ${changeClass(quote.change)}`} style={{ fontSize: 15 }}>
+                {formatSigned(quote.change)} ({formatPercent(quote.changePercent)})
               </span>
             </div>
           )}

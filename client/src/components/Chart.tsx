@@ -203,11 +203,11 @@ export function Chart({
     });
 
     const candleSeries = chart.addCandlestickSeries({
-      upColor: '#15803d',
-      downColor: '#2f8fff',
+      upColor: '#17c964',
+      downColor: '#f5304a',
       borderVisible: false,
-      wickUpColor: '#15803d',
-      wickDownColor: '#2f8fff',
+      wickUpColor: '#17c964',
+      wickDownColor: '#f5304a',
     });
     candleSeries.priceScale().applyOptions({
       scaleMargins: { top: 0.1, bottom: 0.28 },
@@ -315,7 +315,7 @@ export function Chart({
       candles.length === prev.length + 1 &&
       candles[prev.length - 1]?.time === prev.lastTime;
 
-    const volumeColor = (c: Candle) => (c.close >= c.open ? 'rgba(21, 128, 61, 0.6)' : 'rgba(47, 143, 255, 0.6)');
+    const volumeColor = (c: Candle) => (c.close >= c.open ? 'rgba(23, 201, 100, 0.5)' : 'rgba(245, 48, 74, 0.5)');
 
     if (isSimpleAppend) {
       // Tick-by-tick playback: append just the new bar instead of re-rendering
@@ -412,7 +412,7 @@ export function Chart({
     const markers: SeriesMarker<UTCTimestamp>[] = (tradeMarkers ?? []).map((m) => ({
       time: m.time as UTCTimestamp,
       position: m.side === 'BUY' ? 'belowBar' : 'aboveBar',
-      color: m.side === 'BUY' ? '#15803d' : '#2f8fff',
+      color: m.side === 'BUY' ? '#17c964' : '#f5304a',
       shape: m.side === 'BUY' ? 'arrowUp' : 'arrowDown',
       text: m.side,
     }));

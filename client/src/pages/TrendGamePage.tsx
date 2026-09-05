@@ -190,7 +190,7 @@ export function TrendGamePage() {
     if ((phase === 'revealing' || phase === 'result') && startPrice) {
       const lines: PositionLine[] = [{ price: predictedPrice, title: `TARGET ${formatSigned(predictedPct)}%`, color: '#e0a52c' }];
       if (phase === 'result' && current) {
-        lines.push({ price: current.close, title: `ACTUAL ${formatCurrency(current.close)}`, color: current.close >= startPrice ? '#15803d' : '#2f8fff' });
+        lines.push({ price: current.close, title: `ACTUAL ${formatCurrency(current.close)}`, color: current.close >= startPrice ? '#17c964' : '#f5304a' });
       }
       return lines;
     }

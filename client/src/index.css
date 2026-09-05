@@ -185,6 +185,55 @@ button {
   color: var(--text-dim);
 }
 
+/* Webull/TradingView-style colored change chip: a tinted pill instead of
+   plain colored text, with a direction triangle baked in via ::before. */
+.change-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.change-badge.up {
+  background: rgba(23, 201, 100, 0.14);
+  color: var(--green);
+}
+
+.change-badge.down {
+  background: rgba(245, 48, 74, 0.14);
+  color: var(--red);
+}
+
+.change-badge.flat {
+  background: rgba(139, 147, 157, 0.12);
+  color: var(--text-dim);
+}
+
+.change-badge::before {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+}
+
+.change-badge.up::before {
+  border-bottom: 5px solid var(--green);
+}
+
+.change-badge.down::before {
+  border-top: 5px solid var(--red);
+}
+
+.change-badge.flat::before {
+  display: none;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -217,6 +266,7 @@ tbody tr:hover {
 .num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
 }
 
 .search-input {
@@ -390,27 +440,37 @@ tbody tr:hover {
 
 .tabs {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   margin-bottom: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  width: fit-content;
 }
 
 .tabs button,
 .tabs a {
-  padding: 8px 14px;
-  border-radius: 8px;
+  padding: 6px 13px;
+  border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-dim);
   font-size: 13px;
   font-weight: 600;
   text-decoration: none;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.tabs button:hover,
+.tabs a:hover {
+  color: var(--text);
 }
 
 .tabs button.active,
 .tabs a.active {
-  background: var(--bg-hover);
-  color: var(--text);
-  border-color: var(--border);
+  background: var(--accent);
+  color: #fff;
 }
 
 .empty-state {

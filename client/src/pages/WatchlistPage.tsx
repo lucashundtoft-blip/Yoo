@@ -57,7 +57,6 @@ export function WatchlistPage() {
                 <th>Symbol</th>
                 <th className="num">Price</th>
                 <th className="num">Change</th>
-                <th className="num">% Change</th>
                 <th></th>
               </tr>
             </thead>
@@ -70,11 +69,14 @@ export function WatchlistPage() {
                       <strong>{symbol}</strong>
                     </td>
                     <td className="num">{quote ? formatCurrency(quote.price) : '—'}</td>
-                    <td className={`num ${quote ? changeClass(quote.change) : ''}`}>
-                      {quote ? formatCurrency(quote.change) : '—'}
-                    </td>
-                    <td className={`num ${quote ? changeClass(quote.changePercent) : ''}`}>
-                      {quote ? formatPercent(quote.changePercent) : '—'}
+                    <td className="num">
+                      {quote ? (
+                        <span className={`change-badge ${changeClass(quote.changePercent)}`}>
+                          {formatCurrency(quote.change)} ({formatPercent(quote.changePercent)})
+                        </span>
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td className="num">
                       <button className="btn btn-secondary" onClick={(e) => remove(symbol, e)}>
