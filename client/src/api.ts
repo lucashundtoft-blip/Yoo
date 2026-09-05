@@ -145,6 +145,13 @@ export interface FuturesBracketOrder {
   filledLeg: 'TP' | 'SL' | null;
 }
 
+export interface AlpacaStatus {
+  configured: boolean;
+  connected: boolean;
+  scope: string | null;
+  connectedAt: string | null;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -223,4 +230,6 @@ export const api = {
     request<FuturesBracketOrder[]>(`/futures/brackets${symbol ? `?symbol=${encodeURIComponent(symbol)}` : ''}`),
   cancelFuturesBracket: (id: number) => request<{ ok: boolean }>(`/futures/brackets/${id}`, { method: 'DELETE' }),
   resetFuturesAccount: () => request<{ ok: boolean }>('/futures/account/reset', { method: 'POST' }),
+  getAlpacaStatus: () => request<AlpacaStatus>('/alpaca/status'),
+  disconnectAlpaca: () => request<{ ok: boolean }>('/alpaca/disconnect', { method: 'POST' }),
 };

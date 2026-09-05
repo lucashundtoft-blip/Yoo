@@ -97,6 +97,14 @@ db.exec(`
     filled_price REAL,
     filled_leg TEXT CHECK (filled_leg IN ('TP', 'SL'))
   );
+
+  CREATE TABLE IF NOT EXISTS alpaca_connection (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    access_token TEXT NOT NULL,
+    token_type TEXT NOT NULL,
+    scope TEXT,
+    connected_at TEXT NOT NULL
+  );
 `);
 
 const existingFuturesAccount = db.prepare('SELECT id FROM futures_account WHERE id = 1').get();

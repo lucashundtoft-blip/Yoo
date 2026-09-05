@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { SearchBar } from './SearchBar';
-import { WatchlistIcon, PortfolioIcon, OrdersIcon, ReplayIcon, FuturesIcon, AlertsIcon } from './TabIcons';
+import { WatchlistIcon, PortfolioIcon, OrdersIcon, ReplayIcon, FuturesIcon, AlertsIcon, SettingsIcon } from './TabIcons';
 
 const TABS = [
   { to: '/', end: true, label: 'Watchlist', Icon: WatchlistIcon },
@@ -9,6 +9,7 @@ const TABS = [
   { to: '/replay', end: false, label: 'Replay', Icon: ReplayIcon },
   { to: '/futures', end: false, label: 'Futures', Icon: FuturesIcon },
   { to: '/alerts', end: false, label: 'Alerts', Icon: AlertsIcon },
+  { to: '/settings', end: false, label: 'Settings', Icon: SettingsIcon },
 ];
 
 export function NavBar() {

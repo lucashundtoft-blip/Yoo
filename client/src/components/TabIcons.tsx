@@ -69,3 +69,12 @@ export function FuturesIcon({ active }: IconProps) {
     </svg>
   );
 }
+
+export function SettingsIcon({ active }: IconProps) {
+  return (
+    <svg {...common} stroke={active ? '#2f81f7' : '#8b939d'}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3.5v2.2M12 18.3v2.2M20.5 12h-2.2M5.7 12H3.5M17.7 6.3l-1.55 1.55M7.85 16.15 6.3 17.7M17.7 17.7l-1.55-1.55M7.85 7.85 6.3 6.3" />
+    </svg>
+  );
+}

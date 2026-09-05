@@ -11,6 +11,7 @@ import { FuturesDetailPage } from './pages/FuturesDetailPage';
 import { FuturesPortfolioPage } from './pages/FuturesPortfolioPage';
 import { FuturesOrdersPage } from './pages/FuturesOrdersPage';
 import { AlertsPage } from './pages/AlertsPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
             <Route path="/futures-portfolio" element={<FuturesPortfolioPage />} />
             <Route path="/futures-orders" element={<FuturesOrdersPage />} />
             <Route path="/alerts" element={<AlertsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>
       </div>

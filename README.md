@@ -84,6 +84,37 @@ Metals other than gold/silver and every stock-index future (ES, NQ, RTY,
 etc.) have no free or wired-up real data source, so those stay simulated
 regardless of which keys are set.
 
+## Connect with Alpaca
+
+The **Settings** page can link your real Alpaca brokerage account via
+Alpaca's OAuth2 flow ("Connect with Alpaca"), independent of the paper
+trading simulator's own fake cash account. This only stores an access
+token for the connected account — it doesn't place real orders anywhere
+in the app yet.
+
+To enable it, [register an OAuth app](https://app.alpaca.markets/brokerage/apps)
+with Alpaca and set:
+
+```bash
+export ALPACA_OAUTH_CLIENT_ID=your_client_id
+export ALPACA_OAUTH_CLIENT_SECRET=your_client_secret
+export ALPACA_OAUTH_REDIRECT_URI=http://localhost:4000/api/alpaca/oauth/callback
+```
+
+The redirect URI must exactly match what's registered with your Alpaca
+OAuth app. If you run the client's Vite dev server (`:5173`) separately
+from the API (`:4000`), also set `ALPACA_OAUTH_CLIENT_ORIGIN=http://localhost:5173`
+so the post-login redirect lands back in the running app instead of the
+bare API server; leave it unset for a single-service deploy where both
+are served from the same origin.
+
+Two optional overrides, in case Alpaca's endpoints change:
+
+```bash
+export ALPACA_OAUTH_AUTHORIZE_URL=https://app.alpaca.markets/oauth/authorize  # default
+export ALPACA_OAUTH_TOKEN_URL=https://authx.alpaca.markets/v1/oauth2/token   # default
+```
+
 ## Indicators
 
 - **Simple Moving Average (SMA)** — toggle a 20- or 50-period SMA line on any

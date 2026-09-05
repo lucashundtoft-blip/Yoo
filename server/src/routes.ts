@@ -15,6 +15,15 @@ import {
 } from './trading.js';
 import { getWatchlist, addToWatchlist, removeFromWatchlist } from './watchlist.js';
 import { getRecentAlerts, WATCHED_SYMBOLS } from './patternWatcher.js';
+import {
+  buildAuthorizeUrl,
+  consumeState,
+  exchangeCodeForToken,
+  getConnection,
+  disconnect as disconnectAlpaca,
+  isOAuthConfigured,
+  AlpacaOAuthError,
+} from './alpacaOAuth.js';
 import { FUTURES_CONTRACTS, getContract } from './futuresContracts.js';
 import {
   buyFutures,
@@ -305,5 +314,64 @@ router.delete('/futures/brackets/:id', (req, res, next) => {
 
 router.post('/futures/account/reset', (_req, res) => {
   resetFuturesAccount();
+  res.json({ ok: true });
+});
+
+router.get('/alpaca/status', (_req, res) => {
+  const connection = getConnection();
+  res.json({
+    configured: isOAuthConfigured(),
+    connected: Boolean(connection),
+    scope: connection?.scope ?? null,
+    connectedAt: connection?.connected_at ?? null,
+  });
+});
+
+router.get('/alpaca/oauth/authorize', (_req, res) => {
+  try {
+    res.redirect(buildAuthorizeUrl());
+  } catch (err) {
+    if (err instanceof AlpacaOAuthError) return res.status(400).json({ error: err.message });
+    throw err;
+  }
+});
+
+// In dev, the client runs on its own Vite origin (e.g. http://localhost:5173)
+// separate from this API server, so a bare relative redirect would 404 here
+// instead of landing in the app. Set ALPACA_OAUTH_CLIENT_ORIGIN in that case;
+// in prod (single-service deploy) this is left unset and the relative path
+// resolves against this same server, which also serves the built client.
+function settingsRedirect(query: Record<string, string>): string {
+  const path = `/settings?${new URLSearchParams(query)}`;
+  const clientOrigin = process.env.ALPACA_OAUTH_CLIENT_ORIGIN;
+  return clientOrigin ? new URL(path, clientOrigin).toString() : path;
+}
+
+router.get('/alpaca/oauth/callback', async (req, res) => {
+  const state = req.query.state ? String(req.query.state) : undefined;
+  const code = req.query.code ? String(req.query.code) : undefined;
+  const oauthError = req.query.error ? String(req.query.error) : undefined;
+
+  if (oauthError) {
+    return res.redirect(settingsRedirect({ alpaca: 'error', message: oauthError }));
+  }
+  if (!consumeState(state)) {
+    return res.redirect(settingsRedirect({ alpaca: 'error', message: 'Invalid or expired OAuth state' }));
+  }
+  if (!code) {
+    return res.redirect(settingsRedirect({ alpaca: 'error', message: 'Missing authorization code' }));
+  }
+
+  try {
+    await exchangeCodeForToken(code);
+    res.redirect(settingsRedirect({ alpaca: 'connected' }));
+  } catch (err) {
+    const message = err instanceof AlpacaOAuthError ? err.message : 'Token exchange failed';
+    res.redirect(settingsRedirect({ alpaca: 'error', message }));
+  }
+});
+
+router.post('/alpaca/disconnect', (_req, res) => {
+  disconnectAlpaca();
   res.json({ ok: true });
 });
