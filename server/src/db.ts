@@ -107,6 +107,19 @@ db.exec(`
   );
 `);
 
+// Trailing-stop support was added after these tables shipped -- add the
+// columns to any pre-existing database rather than requiring a fresh one.
+function ensureColumn(table: string, column: string, ddl: string) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
+}
+for (const table of ['bracket_orders', 'futures_bracket_orders']) {
+  ensureColumn(table, 'trail_percent', 'trail_percent REAL');
+  ensureColumn(table, 'high_water_mark', 'high_water_mark REAL');
+}
+
 const existingFuturesAccount = db.prepare('SELECT id FROM futures_account WHERE id = 1').get();
 if (!existingFuturesAccount) {
   db.prepare('INSERT INTO futures_account (id, cash) VALUES (1, ?)').run(STARTING_FUTURES_BALANCE);

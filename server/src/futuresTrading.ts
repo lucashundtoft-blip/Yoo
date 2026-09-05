@@ -179,6 +179,8 @@ export interface FuturesBracketOrder {
   quantity: number;
   takeProfitPrice: number | null;
   stopLossPrice: number | null;
+  trailPercent: number | null;
+  highWaterMark: number | null;
   status: 'ACTIVE' | 'FILLED' | 'CANCELLED';
   createdAt: string;
   filledAt: string | null;
@@ -194,6 +196,8 @@ function rowToFuturesBracket(row: any): FuturesBracketOrder {
     quantity: row.quantity,
     takeProfitPrice: row.take_profit_price,
     stopLossPrice: row.stop_loss_price,
+    trailPercent: row.trail_percent,
+    highWaterMark: row.high_water_mark,
     status: row.status,
     createdAt: row.created_at,
     filledAt: row.filled_at,
@@ -207,26 +211,43 @@ function rowToFuturesBracket(row: any): FuturesBracketOrder {
  * direction closes the position -- and which way price needs to move to hit
  * each level -- depends on it. Doesn't place a real order with a broker; a
  * background check (see checkFuturesBrackets) polls quotes and closes the
- * position automatically once either level is touched. */
+ * position automatically once either level is touched.
+ *
+ * stopLossPrice and trailPercent are mutually exclusive: a fixed stop stays
+ * put, while a trailing stop re-anchors to entryPrice's high/low-water mark
+ * (favorable-direction extreme) and follows it, only ever tightening. */
 export function createFuturesBracket(
   symbol: string,
   side: 'BUY' | 'SELL',
   quantity: number,
+  entryPrice: number,
   takeProfitPrice: number | null,
-  stopLossPrice: number | null
+  stopLossPrice: number | null,
+  trailPercent: number | null = null
 ): FuturesBracketOrder {
   symbol = symbol.toUpperCase();
   if (quantity <= 0) throw new FuturesTradingError('Quantity must be positive');
-  if (takeProfitPrice == null && stopLossPrice == null) {
-    throw new FuturesTradingError('Provide at least one of takeProfitPrice or stopLossPrice');
+  if (stopLossPrice != null && trailPercent != null) {
+    throw new FuturesTradingError('Use either a fixed stop-loss price or a trailing stop percent, not both');
   }
+  if (trailPercent != null && !(trailPercent > 0 && trailPercent < 100)) {
+    throw new FuturesTradingError('Trailing stop percent must be between 0 and 100');
+  }
+  if (takeProfitPrice == null && stopLossPrice == null && trailPercent == null) {
+    throw new FuturesTradingError('Provide at least one of takeProfitPrice, stopLossPrice, or trailPercent');
+  }
+  const highWaterMark = trailPercent != null ? entryPrice : null;
+  if (trailPercent != null) {
+    stopLossPrice = side === 'BUY' ? entryPrice * (1 - trailPercent / 100) : entryPrice * (1 + trailPercent / 100);
+  }
+
   const createdAt = new Date().toISOString();
   const info = db
     .prepare(
-      `INSERT INTO futures_bracket_orders (symbol, side, quantity, take_profit_price, stop_loss_price, status, created_at)
-       VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?)`
+      `INSERT INTO futures_bracket_orders (symbol, side, quantity, take_profit_price, stop_loss_price, trail_percent, high_water_mark, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?)`
     )
-    .run(symbol, side, quantity, takeProfitPrice, stopLossPrice, createdAt);
+    .run(symbol, side, quantity, takeProfitPrice, stopLossPrice, trailPercent, highWaterMark, createdAt);
   return {
     id: Number(info.lastInsertRowid),
     symbol,
@@ -234,6 +255,8 @@ export function createFuturesBracket(
     quantity,
     takeProfitPrice,
     stopLossPrice,
+    trailPercent,
+    highWaterMark,
     status: 'ACTIVE',
     createdAt,
     filledAt: null,
@@ -276,6 +299,24 @@ export async function checkFuturesBrackets(getPrice: (symbol: string) => Promise
     if (!price) continue;
 
     const isLong = bracket.side === 'BUY';
+
+    if (bracket.trailPercent != null) {
+      const favorableMove = isLong
+        ? bracket.highWaterMark == null || price > bracket.highWaterMark
+        : bracket.highWaterMark == null || price < bracket.highWaterMark;
+      if (favorableMove) {
+        bracket.highWaterMark = price;
+        bracket.stopLossPrice = isLong
+          ? price * (1 - bracket.trailPercent / 100)
+          : price * (1 + bracket.trailPercent / 100);
+        db.prepare('UPDATE futures_bracket_orders SET high_water_mark = ?, stop_loss_price = ? WHERE id = ?').run(
+          bracket.highWaterMark,
+          bracket.stopLossPrice,
+          bracket.id
+        );
+      }
+    }
+
     let leg: 'TP' | 'SL' | null = null;
     if (isLong) {
       if (bracket.takeProfitPrice != null && price >= bracket.takeProfitPrice) leg = 'TP';

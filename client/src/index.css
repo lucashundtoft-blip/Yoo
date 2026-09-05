@@ -473,6 +473,41 @@ tbody tr:hover {
   color: #fff;
 }
 
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
 .empty-state {
   text-align: center;
   padding: 40px 20px;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, type FuturesBracketOrder, type FuturesContract, type FuturesPosition, type Quote } from '../api';
-import { formatCurrency, formatSigned } from '../format';
+import { formatCurrency, formatSigned, formatBracketLabel } from '../format';
+import { ProtectionControls, DEFAULT_PROTECTION, resolveProtection, protectionError, type ProtectionValue } from './ProtectionControls';
 
 interface FuturesOrderPanelProps {
   contract: FuturesContract;
@@ -13,9 +14,7 @@ interface FuturesOrderPanelProps {
 export function FuturesOrderPanel({ contract, quote, availableMargin, position, onOrderPlaced }: FuturesOrderPanelProps) {
   const [side, setSide] = useState<'BUY' | 'SELL'>('BUY');
   const [quantity, setQuantity] = useState('1');
-  const [useBracket, setUseBracket] = useState(false);
-  const [takeProfitPrice, setTakeProfitPrice] = useState('');
-  const [stopLossPrice, setStopLossPrice] = useState('');
+  const [protection, setProtection] = useState<ProtectionValue>(DEFAULT_PROTECTION);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -32,19 +31,15 @@ export function FuturesOrderPanel({ contract, quote, availableMargin, position, 
   const marginNeeded = openedQty * contract.approxMargin;
   const freedMargin = closedQty * contract.approxMargin;
   const canAfford = marginNeeded <= availableMargin + freedMargin;
+  // Max contracts this side could reach, independent of what's currently
+  // typed: close out any opposing position for free (margin-wise), then
+  // spend the rest of available margin opening new ones.
+  const closingAllQty = heldQty !== 0 && Math.sign(heldQty) !== Math.sign(side === 'BUY' ? 1 : -1) ? Math.abs(heldQty) : 0;
+  const maxQty = closingAllQty + Math.floor((availableMargin + closingAllQty * contract.approxMargin) / contract.approxMargin);
 
-  const tpValue = takeProfitPrice ? Number(takeProfitPrice) : null;
-  const slValue = stopLossPrice ? Number(stopLossPrice) : null;
   const price = quote?.price ?? 0;
-  // A BUY opens/adds to a long (TP above, SL below); a SELL opens/adds to a
-  // short (the mirror image).
-  const bracketInvalid =
-    useBracket &&
-    ((tpValue == null && slValue == null) ||
-      (price > 0 &&
-        (side === 'BUY'
-          ? (tpValue != null && tpValue <= price) || (slValue != null && slValue >= price)
-          : (tpValue != null && tpValue >= price) || (slValue != null && slValue <= price))));
+  const direction = side === 'BUY' ? 'long' : 'short';
+  const protectionMsg = protectionError(protection, price, direction);
 
   async function loadBrackets() {
     try {
@@ -66,25 +61,20 @@ export function FuturesOrderPanel({ contract, quote, availableMargin, position, 
       setError('Enter a quantity greater than zero');
       return;
     }
-    if (bracketInvalid) {
-      setError(
-        side === 'BUY'
-          ? 'Take profit must be above and stop loss below the current price'
-          : 'Take profit must be below and stop loss above the current price'
-      );
+    if (protectionMsg) {
+      setError(protectionMsg);
       return;
     }
     setSubmitting(true);
     try {
-      const order = await api.placeFuturesOrder(contract.symbol, side, qty, useBracket ? tpValue : null, useBracket ? slValue : null);
+      const { takeProfitPrice, stopLossPrice, trailingStopPercent } = resolveProtection(protection, price, direction);
+      const order = await api.placeFuturesOrder(contract.symbol, side, qty, takeProfitPrice, stopLossPrice, trailingStopPercent);
       setSuccess(
         `${order.side === 'BUY' ? 'Bought' : 'Sold'} ${order.quantity} ${order.symbol} @ ${formatCurrency(order.price)}` +
           (order.realizedPl !== 0 ? ` (realized ${formatSigned(order.realizedPl)})` : '')
       );
       setQuantity('1');
-      setTakeProfitPrice('');
-      setStopLossPrice('');
-      setUseBracket(false);
+      setProtection(DEFAULT_PROTECTION);
       onOrderPlaced();
       loadBrackets();
     } catch (e) {
@@ -116,7 +106,19 @@ export function FuturesOrderPanel({ contract, quote, availableMargin, position, 
 
       <div className="form-row">
         <label>Contracts</label>
-        <input type="number" min="1" step="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <button type="button" className="btn btn-secondary" onClick={() => setQuantity(String(Math.max(0, maxQty)))}>
+            Max
+          </button>
+        </div>
       </div>
 
       <div className="form-row">
@@ -124,45 +126,9 @@ export function FuturesOrderPanel({ contract, quote, availableMargin, position, 
         <input value={quote ? formatCurrency(quote.price) : '—'} disabled />
       </div>
 
-      <div className="form-row">
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <input type="checkbox" checked={useBracket} onChange={(e) => setUseBracket(e.target.checked)} />
-          Set take profit / stop loss
-        </label>
-      </div>
-
-      {useBracket && (
-        <>
-          <div className="form-row">
-            <label>Take Profit Price</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="Optional"
-              value={takeProfitPrice}
-              onChange={(e) => setTakeProfitPrice(e.target.value)}
-            />
-          </div>
-          <div className="form-row">
-            <label>Stop Loss Price</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="Optional"
-              value={stopLossPrice}
-              onChange={(e) => setStopLossPrice(e.target.value)}
-            />
-          </div>
-          {bracketInvalid && (
-            <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 10 }}>
-              {side === 'BUY'
-                ? 'Take profit must be above, and stop loss below, the current price. Set at least one.'
-                : 'Take profit must be below, and stop loss above, the current price. Set at least one.'}
-            </div>
-          )}
-        </>
+      <ProtectionControls value={protection} onChange={setProtection} price={price} direction={direction} />
+      {protectionMsg && (
+        <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 10, marginTop: -6 }}>{protectionMsg}</div>
       )}
 
       <div className="stat-row" style={{ marginBottom: 14 }}>
@@ -202,7 +168,7 @@ export function FuturesOrderPanel({ contract, quote, availableMargin, position, 
       <button
         className={`btn ${side === 'BUY' ? 'btn-buy' : 'btn-sell'}`}
         style={{ width: '100%' }}
-        disabled={submitting || !quote || qty <= 0 || !canAfford || bracketInvalid}
+        disabled={submitting || !quote || qty <= 0 || !canAfford || Boolean(protectionMsg)}
         onClick={submit}
       >
         {submitting ? 'Placing order...' : `${side === 'BUY' ? 'Buy' : 'Sell'} ${contract.symbol}`}
@@ -228,10 +194,7 @@ export function FuturesOrderPanel({ contract, quote, availableMargin, position, 
               }}
             >
               <span>
-                {b.side === 'BUY' ? 'Long' : 'Short'} {b.quantity} &middot;{' '}
-                {b.takeProfitPrice != null && <>TP {formatCurrency(b.takeProfitPrice)}</>}
-                {b.takeProfitPrice != null && b.stopLossPrice != null && ' / '}
-                {b.stopLossPrice != null && <>SL {formatCurrency(b.stopLossPrice)}</>}
+                {b.side === 'BUY' ? 'Long' : 'Short'} {b.quantity} &middot; {formatBracketLabel(b)}
               </span>
               <button className="btn btn-secondary" style={{ padding: '2px 10px' }} onClick={() => handleCancelBracket(b.id)}>
                 Cancel

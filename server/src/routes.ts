@@ -157,11 +157,18 @@ router.post('/orders', async (req, res, next) => {
 
     const takeProfitPrice = req.body?.takeProfitPrice != null ? Number(req.body.takeProfitPrice) : null;
     const stopLossPrice = req.body?.stopLossPrice != null ? Number(req.body.stopLossPrice) : null;
+    const trailingStopPercent = req.body?.trailingStopPercent != null ? Number(req.body.trailingStopPercent) : null;
     if (side === 'BUY' && takeProfitPrice != null && !(takeProfitPrice > 0)) {
       return res.status(400).json({ error: 'takeProfitPrice must be a positive number' });
     }
     if (side === 'BUY' && stopLossPrice != null && !(stopLossPrice > 0)) {
       return res.status(400).json({ error: 'stopLossPrice must be a positive number' });
+    }
+    if (side === 'BUY' && stopLossPrice != null && trailingStopPercent != null) {
+      return res.status(400).json({ error: 'Use either a fixed stop-loss price or a trailing stop percent, not both' });
+    }
+    if (side === 'BUY' && trailingStopPercent != null && !(trailingStopPercent > 0 && trailingStopPercent < 100)) {
+      return res.status(400).json({ error: 'trailingStopPercent must be between 0 and 100' });
     }
 
     const quote = await marketData.getQuote(symbol);
@@ -175,8 +182,8 @@ router.post('/orders', async (req, res, next) => {
 
     const order = side === 'BUY' ? buy(symbol, quantity, quote.price) : sell(symbol, quantity, quote.price);
 
-    if (side === 'BUY' && (takeProfitPrice != null || stopLossPrice != null)) {
-      createBracket(symbol, quantity, takeProfitPrice, stopLossPrice);
+    if (side === 'BUY' && (takeProfitPrice != null || stopLossPrice != null || trailingStopPercent != null)) {
+      createBracket(symbol, quantity, quote.price, takeProfitPrice, stopLossPrice, trailingStopPercent);
     }
 
     res.json(order);
@@ -260,11 +267,18 @@ router.post('/futures/orders', async (req, res, next) => {
 
     const takeProfitPrice = req.body?.takeProfitPrice != null ? Number(req.body.takeProfitPrice) : null;
     const stopLossPrice = req.body?.stopLossPrice != null ? Number(req.body.stopLossPrice) : null;
+    const trailingStopPercent = req.body?.trailingStopPercent != null ? Number(req.body.trailingStopPercent) : null;
     if (takeProfitPrice != null && !(takeProfitPrice > 0)) {
       return res.status(400).json({ error: 'takeProfitPrice must be a positive number' });
     }
     if (stopLossPrice != null && !(stopLossPrice > 0)) {
       return res.status(400).json({ error: 'stopLossPrice must be a positive number' });
+    }
+    if (stopLossPrice != null && trailingStopPercent != null) {
+      return res.status(400).json({ error: 'Use either a fixed stop-loss price or a trailing stop percent, not both' });
+    }
+    if (trailingStopPercent != null && !(trailingStopPercent > 0 && trailingStopPercent < 100)) {
+      return res.status(400).json({ error: 'trailingStopPercent must be between 0 and 100' });
     }
 
     const quote = await marketData.getQuote(symbol);
@@ -286,8 +300,8 @@ router.post('/futures/orders', async (req, res, next) => {
 
     const order = side === 'BUY' ? buyFutures(symbol, quantity, quote.price) : sellFutures(symbol, quantity, quote.price);
 
-    if (takeProfitPrice != null || stopLossPrice != null) {
-      createFuturesBracket(symbol, side, quantity, takeProfitPrice, stopLossPrice);
+    if (takeProfitPrice != null || stopLossPrice != null || trailingStopPercent != null) {
+      createFuturesBracket(symbol, side, quantity, quote.price, takeProfitPrice, stopLossPrice, trailingStopPercent);
     }
 
     res.json(order);

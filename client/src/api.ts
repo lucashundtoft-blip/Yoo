@@ -86,6 +86,8 @@ export interface BracketOrder {
   quantity: number;
   takeProfitPrice: number | null;
   stopLossPrice: number | null;
+  trailPercent: number | null;
+  highWaterMark: number | null;
   status: 'ACTIVE' | 'FILLED' | 'CANCELLED';
   createdAt: string;
   filledAt: string | null;
@@ -138,6 +140,8 @@ export interface FuturesBracketOrder {
   quantity: number;
   takeProfitPrice: number | null;
   stopLossPrice: number | null;
+  trailPercent: number | null;
+  highWaterMark: number | null;
   status: 'ACTIVE' | 'FILLED' | 'CANCELLED';
   createdAt: string;
   filledAt: string | null;
@@ -193,11 +197,12 @@ export const api = {
     side: 'BUY' | 'SELL',
     quantity: number,
     takeProfitPrice?: number | null,
-    stopLossPrice?: number | null
+    stopLossPrice?: number | null,
+    trailingStopPercent?: number | null
   ) =>
     request<Order>('/orders', {
       method: 'POST',
-      body: JSON.stringify({ symbol, side, quantity, takeProfitPrice, stopLossPrice }),
+      body: JSON.stringify({ symbol, side, quantity, takeProfitPrice, stopLossPrice, trailingStopPercent }),
     }),
   getBrackets: (symbol?: string) =>
     request<BracketOrder[]>(`/brackets${symbol ? `?symbol=${encodeURIComponent(symbol)}` : ''}`),
@@ -220,11 +225,12 @@ export const api = {
     side: 'BUY' | 'SELL',
     quantity: number,
     takeProfitPrice?: number | null,
-    stopLossPrice?: number | null
+    stopLossPrice?: number | null,
+    trailingStopPercent?: number | null
   ) =>
     request<FuturesOrder>('/futures/orders', {
       method: 'POST',
-      body: JSON.stringify({ symbol, side, quantity, takeProfitPrice, stopLossPrice }),
+      body: JSON.stringify({ symbol, side, quantity, takeProfitPrice, stopLossPrice, trailingStopPercent }),
     }),
   getFuturesBrackets: (symbol?: string) =>
     request<FuturesBracketOrder[]>(`/futures/brackets${symbol ? `?symbol=${encodeURIComponent(symbol)}` : ''}`),

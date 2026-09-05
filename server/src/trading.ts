@@ -126,6 +126,8 @@ export interface BracketOrder {
   quantity: number;
   takeProfitPrice: number | null;
   stopLossPrice: number | null;
+  trailPercent: number | null;
+  highWaterMark: number | null;
   status: 'ACTIVE' | 'FILLED' | 'CANCELLED';
   createdAt: string;
   filledAt: string | null;
@@ -135,31 +137,48 @@ export interface BracketOrder {
 
 /** Attaches a take-profit / stop-loss bracket to shares just bought. Doesn't
  * place a real order with a broker -- a background check (see checkBrackets)
- * polls quotes and sells automatically once either level is touched. */
+ * polls quotes and sells automatically once either level is touched.
+ *
+ * stopLossPrice and trailPercent are mutually exclusive: a fixed stop stays
+ * put, while a trailing stop re-anchors to entryPrice's high-water mark and
+ * follows it up (see checkBrackets), only ever tightening. */
 export function createBracket(
   symbol: string,
   quantity: number,
+  entryPrice: number,
   takeProfitPrice: number | null,
-  stopLossPrice: number | null
+  stopLossPrice: number | null,
+  trailPercent: number | null = null
 ): BracketOrder {
   symbol = symbol.toUpperCase();
   if (quantity <= 0) throw new TradingError('Quantity must be positive');
-  if (takeProfitPrice == null && stopLossPrice == null) {
-    throw new TradingError('Provide at least one of takeProfitPrice or stopLossPrice');
+  if (stopLossPrice != null && trailPercent != null) {
+    throw new TradingError('Use either a fixed stop-loss price or a trailing stop percent, not both');
   }
+  if (trailPercent != null && !(trailPercent > 0 && trailPercent < 100)) {
+    throw new TradingError('Trailing stop percent must be between 0 and 100');
+  }
+  if (takeProfitPrice == null && stopLossPrice == null && trailPercent == null) {
+    throw new TradingError('Provide at least one of takeProfitPrice, stopLossPrice, or trailPercent');
+  }
+  const highWaterMark = trailPercent != null ? entryPrice : null;
+  if (trailPercent != null) stopLossPrice = entryPrice * (1 - trailPercent / 100);
+
   const createdAt = new Date().toISOString();
   const info = db
     .prepare(
-      `INSERT INTO bracket_orders (symbol, quantity, take_profit_price, stop_loss_price, status, created_at)
-       VALUES (?, ?, ?, ?, 'ACTIVE', ?)`
+      `INSERT INTO bracket_orders (symbol, quantity, take_profit_price, stop_loss_price, trail_percent, high_water_mark, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'ACTIVE', ?)`
     )
-    .run(symbol, quantity, takeProfitPrice, stopLossPrice, createdAt);
+    .run(symbol, quantity, takeProfitPrice, stopLossPrice, trailPercent, highWaterMark, createdAt);
   return {
     id: Number(info.lastInsertRowid),
     symbol,
     quantity,
     takeProfitPrice,
     stopLossPrice,
+    trailPercent,
+    highWaterMark,
     status: 'ACTIVE',
     createdAt,
     filledAt: null,
@@ -175,6 +194,8 @@ function rowToBracket(row: any): BracketOrder {
     quantity: row.quantity,
     takeProfitPrice: row.take_profit_price,
     stopLossPrice: row.stop_loss_price,
+    trailPercent: row.trail_percent,
+    highWaterMark: row.high_water_mark,
     status: row.status,
     createdAt: row.created_at,
     filledAt: row.filled_at,
@@ -211,6 +232,16 @@ export async function checkBrackets(getPrice: (symbol: string) => Promise<number
       continue;
     }
     if (!price) continue;
+
+    if (bracket.trailPercent != null && (bracket.highWaterMark == null || price > bracket.highWaterMark)) {
+      bracket.highWaterMark = price;
+      bracket.stopLossPrice = price * (1 - bracket.trailPercent / 100);
+      db.prepare('UPDATE bracket_orders SET high_water_mark = ?, stop_loss_price = ? WHERE id = ?').run(
+        bracket.highWaterMark,
+        bracket.stopLossPrice,
+        bracket.id
+      );
+    }
 
     let leg: 'TP' | 'SL' | null = null;
     if (bracket.takeProfitPrice != null && price >= bracket.takeProfitPrice) leg = 'TP';
