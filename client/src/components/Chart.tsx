@@ -226,7 +226,11 @@ export function Chart({
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: '#262b33' },
       timeScale: { borderColor: '#262b33', timeVisible: true },
-      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: true },
+      // vertTouchDrag off: a vertical finger-drag on the chart body now falls
+      // through to the page (normal scroll) instead of panning the chart --
+      // horizontal drag still pans, and dragging the price axis itself
+      // still scales it via handleScale.axisPressedMouseMove below.
+      handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
       handleScale: {
         mouseWheel: true,
         pinch: true,
