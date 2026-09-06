@@ -8,7 +8,7 @@ import { FuturesOrderPanel } from '../components/FuturesOrderPanel';
 import { FuturesSubNav } from '../components/FuturesSubNav';
 import { aggregateByCount, aggregateByCalendarPeriod } from '../aggregateCandles';
 import { formatCurrency, formatPercent, formatSigned, changeClass } from '../format';
-import { SMA_COLORS, computeSMA } from '../sma';
+import { EMA_COLORS, computeEMA } from '../sma';
 
 // A top-down set: check the big trend on a high timeframe first (Monthly/
 // Weekly), then narrow down to Daily/1H/15m for entry timing -- same
@@ -31,7 +31,9 @@ const RANGES: RangeDef[] = [
   { label: 'M', days: 730, resolution: 'D', approxCandles: 24, aggregate: (c) => aggregateByCalendarPeriod(c, 'month') },
 ];
 
-const SMA_PERIODS = [20, 50];
+// Fixed EMA(5,20,200) overlay, always on -- matches Webull's default futures
+// chart header rather than a toggleable indicator list.
+const EMA_PERIODS = [5, 20, 200];
 
 export function FuturesDetailPage() {
   const { symbol = '' } = useParams();
@@ -40,7 +42,6 @@ export function FuturesDetailPage() {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [projection, setProjection] = useState<Projection | null>(null);
   const [showProjection, setShowProjection] = useState(false);
-  const [smaPeriods, setSmaPeriods] = useState<number[]>([20, 50]);
   const [account, setAccount] = useState<FuturesAccount | null>(null);
   const [rangeIndex, setRangeIndex] = useState(2);
   const [error, setError] = useState<string | null>(null);
@@ -98,10 +99,6 @@ export function FuturesDetailPage() {
     loadChart();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, rangeIndex]);
-
-  function toggleSma(period: number) {
-    setSmaPeriods((prev) => (prev.includes(period) ? prev.filter((p) => p !== period) : [...prev, period].sort((a, b) => a - b)));
-  }
 
   if (error) {
     return (
@@ -182,12 +179,6 @@ export function FuturesDetailPage() {
                 ))}
               </div>
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                {SMA_PERIODS.map((period) => (
-                  <label key={period} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
-                    <input type="checkbox" checked={smaPeriods.includes(period)} onChange={() => toggleSma(period)} />
-                    SMA {period}
-                  </label>
-                ))}
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
                   <input type="checkbox" checked={showProjection} onChange={(e) => setShowProjection(e.target.checked)} />
                   Trend projection
@@ -197,6 +188,18 @@ export function FuturesDetailPage() {
                   PVT
                 </label>
               </div>
+            </div>
+            <div style={{ fontSize: 13, marginBottom: 6, fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ color: 'var(--text-dim)' }}>EMA(5,20,200)</span>{' '}
+              {EMA_PERIODS.map((period, i) => {
+                const series = computeEMA(candles, period);
+                const latestValue = series[series.length - 1]?.value;
+                return (
+                  <span key={period} style={{ color: EMA_COLORS[period], marginLeft: i === 0 ? 8 : 12 }}>
+                    EMA{period}:{latestValue != null ? formatCurrency(latestValue) : '--'}
+                  </span>
+                );
+              })}
             </div>
             {displayBar && (
               <div
@@ -210,49 +213,35 @@ export function FuturesDetailPage() {
                 <span style={{ color: 'var(--text-dim)' }}>Vol <strong>{displayBar.volume.toLocaleString()}</strong></span>
               </div>
             )}
-            {(smaPeriods.length > 0 || (showProjection && projection)) && (
+            {showProjection && projection && (
               <div className="legend">
-                {smaPeriods.map((period) => {
-                  const series = computeSMA(candles, period);
-                  const latestValue = series[series.length - 1]?.value;
-                  return (
-                    <span key={period} style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      <span className="legend-swatch" style={{ background: SMA_COLORS[period] ?? '#8b939d' }} />
-                      SMA {period}
-                      {latestValue != null && `: ${formatCurrency(latestValue)}`}
-                    </span>
-                  );
-                })}
-                {showProjection && projection && (
-                  <>
-                    <span>
-                      <span className="legend-swatch" style={{ background: '#2f81f7' }} />
-                      Trendline (fitted)
-                    </span>
-                    <span>
-                      <span className="legend-swatch" style={{ background: '#e0a52c' }} />
-                      Projected ({projection.direction})
-                    </span>
-                    <span>
-                      <span className="legend-swatch" style={{ background: '#8b939d' }} />
-                      Trend channel
-                    </span>
-                  </>
-                )}
+                <span>
+                  <span className="legend-swatch" style={{ background: '#2f81f7' }} />
+                  Trendline (fitted)
+                </span>
+                <span>
+                  <span className="legend-swatch" style={{ background: '#e0a52c' }} />
+                  Projected ({projection.direction})
+                </span>
+                <span>
+                  <span className="legend-swatch" style={{ background: '#8b939d' }} />
+                  Trend channel
+                </span>
               </div>
             )}
             <Chart
               candles={candles}
               projection={projection}
               showProjection={showProjection}
-              smaPeriods={smaPeriods}
+              smaPeriods={[]}
+              emaPeriods={EMA_PERIODS}
               onHoverBar={setHoverBar}
               onChartApi={setMainChartApi}
               positionLine={
                 position
                   ? {
                       price: position.avgPrice,
-                      title: `${position.quantity > 0 ? 'LONG' : 'SHORT'} ${Math.abs(position.quantity)} (${formatSigned(livePl ?? position.unrealizedPl)})`,
+                      title: `POS: ${position.quantity > 0 ? '+' : ''}${position.quantity} (${formatSigned(livePl ?? position.unrealizedPl)})`,
                     }
                   : null
               }

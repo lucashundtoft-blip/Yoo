@@ -29,3 +29,24 @@ export const SMA_COLORS: Record<number, string> = {
   200: '#ec4899',
   400: '#eab308',
 };
+
+// Standard exponential smoothing, seeded with the first close (same
+// convention as computeSMA's running-average warmup) so the line is
+// plottable from the first bar instead of waiting out a full period.
+export function computeEMA(candles: Candle[], period: number): SmaPoint[] {
+  if (period <= 0 || candles.length === 0) return [];
+  const k = 2 / (period + 1);
+  const result: SmaPoint[] = [{ time: candles[0].time, value: candles[0].close }];
+  for (let i = 1; i < candles.length; i++) {
+    const prev = result[i - 1].value;
+    result.push({ time: candles[i].time, value: candles[i].close * k + prev * (1 - k) });
+  }
+  return result;
+}
+
+// Matches Webull's EMA(5,20,200) chart header coloring exactly.
+export const EMA_COLORS: Record<number, string> = {
+  5: '#f23645',
+  20: '#ff9800',
+  200: '#8b939d',
+};
