@@ -510,5 +510,5 @@ export function Chart({
     });
   }, [extraPriceLines]);
 
-  return <div ref={containerRef} style={{ height: height ?? 'clamp(420px, 78dvh, 900px)', width: '100%' }} />;
+  return <div ref={containerRef} style={{ height: height ?? 'clamp(380px, 58dvh, 680px)', width: '100%' }} />;
 }
