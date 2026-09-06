@@ -151,24 +151,6 @@ export function FuturesDetailPage() {
             </span>
           </div>
         )}
-        <div className="stat-row" style={{ marginTop: 10 }}>
-          <div className="stat">
-            <span className="label">Margin / Contract</span>
-            <span className="value">{formatCurrency(contract.approxMargin, 0)}</span>
-          </div>
-          <div className="stat">
-            <span className="label">Available Margin</span>
-            <span className="value">{formatCurrency(account?.availableMargin ?? 0, 0)}</span>
-          </div>
-          {position && (
-            <div className="stat">
-              <span className="label">Position P&amp;L</span>
-              <span className={`value ${changeClass(livePl ?? position.unrealizedPl)}`}>
-                {formatSigned(livePl ?? position.unrealizedPl)}
-              </span>
-            </div>
-          )}
-        </div>
       </div>
 
       <div className="grid-2">
@@ -250,6 +232,29 @@ export function FuturesDetailPage() {
                   : null
               }
             />
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              gap: 16,
+              flexWrap: 'wrap',
+              fontSize: 12,
+              color: 'var(--text-dim)',
+              marginBottom: 20,
+              padding: '0 2px',
+            }}
+          >
+            <span>Margin/Contract <strong style={{ color: 'var(--text)' }}>{formatCurrency(contract.approxMargin, 0)}</strong></span>
+            <span>Available Margin <strong style={{ color: 'var(--text)' }}>{formatCurrency(account?.availableMargin ?? 0, 0)}</strong></span>
+            {position && (
+              <span>
+                Position P&amp;L{' '}
+                <strong className={changeClass(livePl ?? position.unrealizedPl)}>
+                  {formatSigned(livePl ?? position.unrealizedPl)}
+                </strong>
+              </span>
+            )}
           </div>
 
           {showPvt && (
