@@ -4,6 +4,7 @@ import type { IChartApi } from 'lightweight-charts';
 import { api, type Candle, type FuturesAccount, type FuturesContract, type Projection, type Quote } from '../api';
 import { Chart, type HoverBar } from '../components/Chart';
 import { PvtChart } from '../components/PvtChart';
+import { OrderBookBar } from '../components/OrderBookBar';
 import { FuturesOrderPanel } from '../components/FuturesOrderPanel';
 import { FuturesSubNav } from '../components/FuturesSubNav';
 import { aggregateByCount, aggregateByCalendarPeriod } from '../aggregateCandles';
@@ -254,6 +255,12 @@ export function FuturesDetailPage() {
           {showPvt && (
             <div className="card" style={{ marginBottom: 20 }}>
               <PvtChart candles={candles} mainChart={mainChartApi} />
+            </div>
+          )}
+
+          {quote && (
+            <div className="card" style={{ marginBottom: 20 }}>
+              <OrderBookBar price={quote.price} tickSize={contract.tickSize} />
             </div>
           )}
         </div>
