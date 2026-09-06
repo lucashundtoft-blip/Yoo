@@ -416,7 +416,7 @@ export function ReplayPage() {
               tickAnimationMs={tickAnimationMs}
               tradeMarkers={tradeMarkers}
               positionLine={positionLine}
-              height="clamp(320px, 55dvh, 560px)"
+              height="clamp(420px, 78dvh, 900px)"
             />
           </div>
 
