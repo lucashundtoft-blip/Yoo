@@ -242,6 +242,15 @@ export function Chart({
       height: containerRef.current.clientHeight,
     });
 
+    // The library sets touch-action: none on its own canvases so it can
+    // intercept touchmove for horizontal panning/pinch, which blocks native
+    // page scroll on a vertical swipe regardless of vertTouchDrag above.
+    // Overriding to pan-y hands vertical swipes back to the browser for
+    // scrolling while horizontal swipes still reach the chart's own handlers.
+    containerRef.current.querySelectorAll('canvas').forEach((canvas) => {
+      canvas.style.touchAction = 'pan-y';
+    });
+
     const candleSeries = chart.addCandlestickSeries({
       upColor: '#15803d',
       downColor: '#2f8fff',
