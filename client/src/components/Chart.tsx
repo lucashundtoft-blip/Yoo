@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   createChart,
   ColorType,
@@ -92,6 +92,8 @@ export function Chart({
   height,
 }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
@@ -118,6 +120,28 @@ export function Chart({
   useEffect(() => {
     tickAnimationMsRef.current = tickAnimationMs;
   }, [tickAnimationMs]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => setIsFullscreen(document.fullscreenElement === wrapperRef.current);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  // TradingView-style fullscreen: fills the whole screen and, on phones,
+  // rotates into landscape (orientation lock only works while fullscreen).
+  async function toggleFullscreen() {
+    if (!wrapperRef.current) return;
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+      return;
+    }
+    await wrapperRef.current.requestFullscreen();
+    const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+    orientation.lock?.('landscape').catch(() => {
+      // Orientation lock isn't supported everywhere (e.g. iOS Safari) --
+      // fullscreen alone still gives a much bigger chart.
+    });
+  }
 
   // Snap any in-flight bar animation straight to its final values — called
   // when a new tick/reset arrives before the previous bar finished forming.
@@ -301,9 +325,13 @@ export function Chart({
       }
     };
     window.addEventListener('resize', handleResize);
+    // Entering/exiting fullscreen resizes the container without firing a
+    // window resize event on some browsers -- resync explicitly.
+    document.addEventListener('fullscreenchange', handleResize);
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      document.removeEventListener('fullscreenchange', handleResize);
       chart.unsubscribeCrosshairMove(handleCrosshairMove);
       if (animationHandleRef.current !== null) cancelAnimationFrame(animationHandleRef.current);
       chart.remove();
@@ -510,5 +538,36 @@ export function Chart({
     });
   }, [extraPriceLines]);
 
-  return <div ref={containerRef} style={{ height: height ?? 'clamp(380px, 58dvh, 680px)', width: '100%' }} />;
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative', background: '#14181d' }}>
+      <button
+        onClick={toggleFullscreen}
+        title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+        style={{
+          position: 'absolute',
+          top: 8,
+          right: 8,
+          zIndex: 2,
+          width: 30,
+          height: 30,
+          borderRadius: 6,
+          border: '1px solid #262b33',
+          background: 'rgba(20, 24, 29, 0.85)',
+          color: '#8b939d',
+          cursor: 'pointer',
+          fontSize: 14,
+          lineHeight: 1,
+        }}
+      >
+        {isFullscreen ? '⤡' : '⛶'}
+      </button>
+      <div
+        ref={containerRef}
+        style={{
+          height: isFullscreen ? '100vh' : height ?? 'clamp(380px, 58dvh, 680px)',
+          width: '100%',
+        }}
+      />
+    </div>
+  );
 }
