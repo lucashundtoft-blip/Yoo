@@ -24,8 +24,11 @@ interface RangeDef {
 }
 
 const RANGES: RangeDef[] = [
+  { label: '5m', days: 1, resolution: '5', approxCandles: 78 },
   { label: '15m', days: 2, resolution: '5', approxCandles: 52, aggregate: (c) => aggregateByCount(c, 3) },
+  { label: '30m', days: 4, resolution: '5', approxCandles: 78, aggregate: (c) => aggregateByCount(c, 6) },
   { label: '1H', days: 10, resolution: '60', approxCandles: 65 },
+  { label: '4H', days: 40, resolution: '60', approxCandles: 60, aggregate: (c) => aggregateByCount(c, 4) },
   { label: 'D', days: 180, resolution: 'D', approxCandles: 180 },
   { label: 'W', days: 730, resolution: 'D', approxCandles: 104, aggregate: (c) => aggregateByCalendarPeriod(c, 'week') },
   { label: 'M', days: 730, resolution: 'D', approxCandles: 24, aggregate: (c) => aggregateByCalendarPeriod(c, 'month') },
@@ -43,7 +46,7 @@ export function FuturesDetailPage() {
   const [projection, setProjection] = useState<Projection | null>(null);
   const [showProjection, setShowProjection] = useState(false);
   const [account, setAccount] = useState<FuturesAccount | null>(null);
-  const [rangeIndex, setRangeIndex] = useState(2);
+  const [rangeIndex, setRangeIndex] = useState(5); // 'D' -- Daily, the default TradingView-style timeframe
   const [error, setError] = useState<string | null>(null);
   const [hoverBar, setHoverBar] = useState<HoverBar | null>(null);
   const [showPvt, setShowPvt] = useState(false);
