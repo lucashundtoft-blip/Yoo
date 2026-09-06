@@ -64,7 +64,8 @@ interface ChartProps {
   extraPriceLines?: PositionLine[];
   /** CSS height for the chart's container — lets the page fit the chart to
    *  the viewport (e.g. clamp() so it never needs scrolling on mobile).
-   *  Falls back to a fixed 560px when omitted. */
+   *  Falls back to a large viewport-relative size when omitted, matching
+   *  TradingView's full-height chart rather than a small fixed box. */
   height?: string;
 }
 
@@ -509,5 +510,5 @@ export function Chart({
     });
   }, [extraPriceLines]);
 
-  return <div ref={containerRef} style={{ height: height ?? '560px', width: '100%' }} />;
+  return <div ref={containerRef} style={{ height: height ?? 'clamp(420px, 78dvh, 900px)', width: '100%' }} />;
 }
