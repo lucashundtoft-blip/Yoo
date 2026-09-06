@@ -11,7 +11,7 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import type { Candle, Projection } from '../api';
-import { computeSMA, SMA_COLORS } from '../sma';
+import { computeSMA, computeEMA, SMA_COLORS, EMA_COLORS } from '../sma';
 import { toHeikinAshi } from '../heikinAshi';
 import { computeTrendChannel } from '../projection';
 
@@ -42,6 +42,10 @@ interface ChartProps {
   projection?: Projection | null;
   showProjection: boolean;
   smaPeriods: number[];
+  /** EMA overlay periods, drawn separately from smaPeriods so pages that
+   *  already use SMA toggles (stock detail, replay) are unaffected. Used
+   *  by the futures chart's fixed EMA(5,20,200) header, matching Webull. */
+  emaPeriods?: number[];
   heikinAshi?: boolean;
   onChartApi?: (chart: IChartApi) => void;
   onHoverBar?: (bar: HoverBar | null) => void;
@@ -76,6 +80,7 @@ export function Chart({
   projection,
   showProjection,
   smaPeriods,
+  emaPeriods,
   heikinAshi,
   onChartApi,
   onHoverBar,
@@ -94,6 +99,7 @@ export function Chart({
   const channelUpperSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const channelLowerSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
   const smaSeriesRef = useRef<Map<number, ISeriesApi<'Line'>>>(new Map());
+  const emaSeriesRef = useRef<Map<number, ISeriesApi<'Line'>>>(new Map());
   const positionPriceLineRef = useRef<IPriceLine | null>(null);
   const extraPriceLinesRef = useRef<IPriceLine[]>([]);
   const candlesRef = useRef<Candle[]>(candles);
@@ -296,6 +302,7 @@ export function Chart({
       if (animationHandleRef.current !== null) cancelAnimationFrame(animationHandleRef.current);
       chart.remove();
       smaSeriesRef.current.clear();
+      emaSeriesRef.current.clear();
     };
   }, []);
 
@@ -407,6 +414,35 @@ export function Chart({
   }, [candles, smaPeriods]);
 
   useEffect(() => {
+    if (!chartRef.current) return;
+    const chart = chartRef.current;
+    const map = emaSeriesRef.current;
+    const periods = emaPeriods ?? [];
+
+    for (const [period, series] of map) {
+      if (!periods.includes(period)) {
+        chart.removeSeries(series);
+        map.delete(period);
+      }
+    }
+
+    for (const period of periods) {
+      if (!map.has(period)) {
+        const series = chart.addLineSeries({
+          color: EMA_COLORS[period] ?? '#8b939d',
+          lineWidth: 1,
+          lastValueVisible: false,
+          priceLineVisible: false,
+        });
+        map.set(period, series);
+      }
+      map.get(period)!.setData(
+        computeEMA(candles, period).map((p) => ({ time: p.time as UTCTimestamp, value: p.value }))
+      );
+    }
+  }, [candles, emaPeriods]);
+
+  useEffect(() => {
     const candleSeries = candleSeriesRef.current;
     if (!candleSeries) return;
     const markers: SeriesMarker<UTCTimestamp>[] = (tradeMarkers ?? []).map((m) => ({
@@ -429,9 +465,9 @@ export function Chart({
     if (positionLine) {
       positionPriceLineRef.current = candleSeries.createPriceLine({
         price: positionLine.price,
-        color: '#e6e9ed',
-        lineWidth: 2,
-        lineStyle: LineStyle.Dotted,
+        color: positionLine.color ?? '#2f81f7',
+        lineWidth: 1,
+        lineStyle: LineStyle.Solid,
         axisLabelVisible: true,
         title: positionLine.title,
       });
