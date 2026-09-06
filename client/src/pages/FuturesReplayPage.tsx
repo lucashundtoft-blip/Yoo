@@ -34,7 +34,7 @@ export function FuturesReplayPage() {
   const [allCandles, setAllCandles] = useState<Candle[]>([]);
   const [cursor, setCursor] = useState(WARMUP);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(2);
+  const [speed, setSpeed] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hoverBar, setHoverBar] = useState<HoverBar | null>(null);
@@ -50,7 +50,11 @@ export function FuturesReplayPage() {
   const activeSymbol = (urlSymbol ?? 'MES').toUpperCase();
   const contract = contracts.find((c) => c.symbol === activeSymbol) ?? null;
   const dataset = DATASETS[datasetIndex];
-  const tickAnimationMs = Math.min(350, (1000 / speed) * 0.75);
+  // Base bar interval is slower than the stock replay's -- futures contracts
+  // print fast, so 1x here is deliberately closer to a readable, real-feeling
+  // pace instead of blurring past in under a second.
+  const BASE_INTERVAL_MS = 2200;
+  const tickAnimationMs = Math.min(350, (BASE_INTERVAL_MS / speed) * 0.35);
 
   const visible = useMemo(() => allCandles.slice(0, cursor), [allCandles, cursor]);
   const current = visible[visible.length - 1] ?? null;
@@ -139,7 +143,7 @@ export function FuturesReplayPage() {
         }
         return c + 1;
       });
-    }, 1000 / speed);
+    }, BASE_INTERVAL_MS / speed);
     return () => clearInterval(interval);
   }, [playing, speed, allCandles.length]);
 
