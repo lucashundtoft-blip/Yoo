@@ -202,7 +202,12 @@ export function Chart({
       rightPriceScale: { borderColor: '#262b33' },
       timeScale: { borderColor: '#262b33', timeVisible: true },
       handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: true },
-      handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
+      handleScale: {
+        mouseWheel: true,
+        pinch: true,
+        axisPressedMouseMove: { time: true, price: true },
+        axisDoubleClickReset: true,
+      },
       kineticScroll: { touch: true, mouse: false },
       width: containerRef.current.clientWidth,
       height: containerRef.current.clientHeight,
@@ -430,7 +435,7 @@ export function Chart({
       if (!map.has(period)) {
         const series = chart.addLineSeries({
           color: EMA_COLORS[period] ?? '#8b939d',
-          lineWidth: 1,
+          lineWidth: period >= 200 ? 2 : 3,
           lastValueVisible: false,
           priceLineVisible: false,
         });

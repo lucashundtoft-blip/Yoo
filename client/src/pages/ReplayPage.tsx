@@ -6,7 +6,10 @@ import { Chart, type HoverBar, type TradeMarker, type PositionLine } from '../co
 import { RsiChart } from '../components/RsiChart';
 import { computeProjection } from '../projection';
 import { formatCurrency, formatSigned, formatPercent, changeClass } from '../format';
-import { SMA_COLORS } from '../sma';
+import { EMA_COLORS, computeEMA } from '../sma';
+
+// Fixed EMA(5,20,200) overlay, always on -- matches Webull's default chart header.
+const EMA_PERIODS = [5, 20, 200];
 
 const DATASETS: { label: string; short: string; days: number; resolution: 'D' | '60' | '5' }[] = [
   { label: '1 day (5-min bars)', short: '1D', days: 1, resolution: '5' },
@@ -20,7 +23,6 @@ const SPEEDS = [1, 2, 5, 10];
 const FALLBACK_TICKERS = ['AAPL', 'AMD', 'MU', 'TSLA', 'NVDA'];
 const WARMUP = 20; // candles visible before replay starts
 const SESSION_CASH = 100_000;
-const AVAILABLE_SMA_PERIODS = [20, 200, 400];
 const RECENT_SYMBOLS_KEY = 'yootrade:replay:recent-symbols';
 const MAX_RECENT_SYMBOLS = 8;
 
@@ -63,7 +65,6 @@ export function ReplayPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [smaPeriods, setSmaPeriods] = useState<number[]>([]);
   const [showProjection, setShowProjection] = useState(false);
   const [showRsi, setShowRsi] = useState(false);
   const [heikinAshi, setHeikinAshi] = useState(false);
@@ -332,20 +333,6 @@ export function ReplayPage() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                {AVAILABLE_SMA_PERIODS.map((period) => (
-                  <label key={period} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
-                    <input
-                      type="checkbox"
-                      checked={smaPeriods.includes(period)}
-                      onChange={() =>
-                        setSmaPeriods((prev) =>
-                          prev.includes(period) ? prev.filter((p) => p !== period) : [...prev, period].sort((a, b) => a - b)
-                        )
-                      }
-                    />
-                    SMA {period}
-                  </label>
-                ))}
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
                   <input type="checkbox" checked={showProjection} onChange={(e) => setShowProjection(e.target.checked)} />
                   Trend projection
@@ -389,37 +376,40 @@ export function ReplayPage() {
               style={{ width: '100%', marginBottom: 8 }}
             />
 
-            {(smaPeriods.length > 0 || (showProjection && projection)) && (
-              <div className="legend">
-                {smaPeriods.map((period) => (
-                  <span key={period}>
-                    <span className="legend-swatch" style={{ background: SMA_COLORS[period] ?? '#8b939d' }} />
-                    SMA {period}
+            <div style={{ fontSize: 13, marginBottom: 6, fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ color: 'var(--text-dim)' }}>EMA(5,20,200)</span>{' '}
+              {EMA_PERIODS.map((period, i) => {
+                const series = computeEMA(visible, period);
+                const latestValue = series[series.length - 1]?.value;
+                return (
+                  <span key={period} style={{ color: EMA_COLORS[period], marginLeft: i === 0 ? 8 : 12 }}>
+                    EMA{period}:{latestValue != null ? formatCurrency(latestValue) : '--'}
                   </span>
-                ))}
-                {showProjection && projection && (
-                  <>
-                    <span>
-                      <span className="legend-swatch" style={{ background: '#2f81f7' }} />
-                      Trendline (fitted)
-                    </span>
-                    <span>
-                      <span className="legend-swatch" style={{ background: '#e0a52c' }} />
-                      Projected ({projection.direction})
-                    </span>
-                    <span>
-                      <span className="legend-swatch" style={{ background: '#8b939d' }} />
-                      Trend channel
-                    </span>
-                  </>
-                )}
+                );
+              })}
+            </div>
+            {showProjection && projection && (
+              <div className="legend">
+                <span>
+                  <span className="legend-swatch" style={{ background: '#2f81f7' }} />
+                  Trendline (fitted)
+                </span>
+                <span>
+                  <span className="legend-swatch" style={{ background: '#e0a52c' }} />
+                  Projected ({projection.direction})
+                </span>
+                <span>
+                  <span className="legend-swatch" style={{ background: '#8b939d' }} />
+                  Trend channel
+                </span>
               </div>
             )}
             <Chart
               candles={visible}
               projection={projection}
               showProjection={showProjection}
-              smaPeriods={smaPeriods}
+              smaPeriods={[]}
+              emaPeriods={EMA_PERIODS}
               heikinAshi={heikinAshi}
               onChartApi={setMainChartApi}
               onHoverBar={setHoverBar}
