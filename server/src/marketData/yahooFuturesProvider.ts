@@ -16,7 +16,9 @@ export const YAHOO_FUTURES_SYMBOL_MAP: Record<string, string> = {
   NQ: 'NQ=F',
   MNQ: 'MNQ=F',
   YM: 'YM=F',
+  MYM: 'MYM=F',
   RTY: 'RTY=F',
+  M2K: 'M2K=F',
   CL: 'CL=F',
   MCL: 'MCL=F',
   NG: 'NG=F',
@@ -35,6 +37,7 @@ export const YAHOO_FUTURES_SYMBOL_MAP: Record<string, string> = {
   '6E': '6E=F',
   '6J': '6J=F',
   '6B': '6B=F',
+  MBT: 'MBT=F',
 };
 
 const INTERVAL_MAP: Record<Resolution, string> = { '5': '5m', '60': '60m', D: '1d' };

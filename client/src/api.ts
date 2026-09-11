@@ -103,6 +103,21 @@ export interface FuturesContract {
   approxMargin: number;
 }
 
+export interface FuturesStat {
+  symbol: string;
+  name: string;
+  group: string;
+  tickSize: number;
+  tickValue: number;
+  multiplier: number;
+  approxMargin: number;
+  atrPoints: number | null;
+  atrDollars: number | null;
+  atrTicks: number | null;
+  atrPercentOfMargin: number | null;
+  lastPrice: number | null;
+}
+
 export interface FuturesPosition {
   symbol: string;
   quantity: number; // signed: positive = long, negative = short
@@ -206,6 +221,7 @@ export const api = {
     }>('/health'),
   getAlerts: (limit = 50) => request<AlertsResponse>(`/alerts?limit=${limit}`),
   getFuturesContracts: () => request<FuturesContract[]>('/futures/contracts'),
+  getFuturesStats: () => request<FuturesStat[]>('/futures/stats'),
   getFuturesAccount: () => request<FuturesAccount>('/futures/account'),
   getFuturesOrders: () => request<FuturesOrder[]>('/futures/orders'),
   placeFuturesOrder: (

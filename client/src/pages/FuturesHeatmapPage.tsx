@@ -21,8 +21,9 @@ interface FutureDef {
 const ALPHA_VANTAGE_SYMBOLS = new Set(['CL', 'NG', 'HG', 'ZC', 'ZW']);
 const DATABENTO_SYMBOLS = new Set(['MCL', 'MGC', 'SIL']);
 const YAHOO_SYMBOLS = new Set([
-  'ES', 'MES', 'NQ', 'MNQ', 'YM', 'RTY', 'CL', 'MCL', 'NG', 'RB', 'GC', 'MGC',
-  'SI', 'SIL', 'HG', 'ZB', 'ZN', 'ZC', 'ZS', 'ZW', '6E', '6J', '6B',
+  'ES', 'MES', 'NQ', 'MNQ', 'YM', 'MYM', 'RTY', 'M2K', 'CL', 'MCL', 'NG', 'RB',
+  'GC', 'MGC', 'SI', 'SIL', 'HG', 'ZB', 'ZN', 'ZC', 'ZS', 'ZW', '6E', '6J',
+  '6B', 'MBT',
 ]);
 
 function realDataLabel(symbol: string, hasFuturesData: boolean, hasCommodityData: boolean, hasYahooFuturesData: boolean): string | null {
@@ -38,7 +39,9 @@ const FUTURES: FutureDef[] = [
   { symbol: 'NQ', name: 'E-mini Nasdaq 100', group: 'Indices' },
   { symbol: 'MNQ', name: 'Micro E-mini Nasdaq 100', group: 'Indices' },
   { symbol: 'YM', name: 'E-mini Dow', group: 'Indices' },
+  { symbol: 'MYM', name: 'Micro E-mini Dow', group: 'Indices' },
   { symbol: 'RTY', name: 'E-mini Russell 2000', group: 'Indices' },
+  { symbol: 'M2K', name: 'Micro E-mini Russell 2000', group: 'Indices' },
   { symbol: 'CL', name: 'Crude Oil', group: 'Energy' },
   { symbol: 'MCL', name: 'Micro WTI Crude Oil', group: 'Energy' },
   { symbol: 'NG', name: 'Natural Gas', group: 'Energy' },
@@ -56,9 +59,10 @@ const FUTURES: FutureDef[] = [
   { symbol: '6E', name: 'Euro FX', group: 'Currencies' },
   { symbol: '6J', name: 'Japanese Yen', group: 'Currencies' },
   { symbol: '6B', name: 'British Pound', group: 'Currencies' },
+  { symbol: 'MBT', name: 'Micro Bitcoin', group: 'Crypto' },
 ];
 
-const GROUPS = ['Indices', 'Energy', 'Metals', 'Rates', 'Agriculture', 'Currencies'];
+const GROUPS = ['Indices', 'Energy', 'Metals', 'Rates', 'Agriculture', 'Currencies', 'Crypto'];
 
 // Green/blue up-down pair (validated for CVD separation + contrast in prior
 // work), intensity scaled by the size of the day's move.
