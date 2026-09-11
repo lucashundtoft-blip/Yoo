@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 
 const TABS = [
   { to: '/futures', label: 'Heat Map' },
+  { to: '/futures-guide', label: 'Guide' },
   { to: '/futures-replay', label: 'Replay' },
   { to: '/futures-portfolio', label: 'Positions' },
   { to: '/futures-orders', label: 'Orders' },

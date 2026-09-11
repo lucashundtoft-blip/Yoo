@@ -26,7 +26,9 @@ export const FUTURES_CONTRACTS: FuturesContract[] = [
   { symbol: 'NQ', name: 'E-mini Nasdaq 100', group: 'Indices', tickSize: 0.25, tickValue: 5, multiplier: 20, approxMargin: 18000 },
   { symbol: 'MNQ', name: 'Micro E-mini Nasdaq 100', group: 'Indices', tickSize: 0.25, tickValue: 0.5, multiplier: 2, approxMargin: 1800 },
   { symbol: 'YM', name: 'E-mini Dow', group: 'Indices', tickSize: 1, tickValue: 5, multiplier: 5, approxMargin: 8800 },
+  { symbol: 'MYM', name: 'Micro E-mini Dow', group: 'Indices', tickSize: 1, tickValue: 0.5, multiplier: 0.5, approxMargin: 880 },
   { symbol: 'RTY', name: 'E-mini Russell 2000', group: 'Indices', tickSize: 0.1, tickValue: 5, multiplier: 50, approxMargin: 6500 },
+  { symbol: 'M2K', name: 'Micro E-mini Russell 2000', group: 'Indices', tickSize: 0.1, tickValue: 0.5, multiplier: 5, approxMargin: 800 },
   { symbol: 'CL', name: 'Crude Oil', group: 'Energy', tickSize: 0.01, tickValue: 10, multiplier: 1000, approxMargin: 6500 },
   { symbol: 'MCL', name: 'Micro WTI Crude Oil', group: 'Energy', tickSize: 0.01, tickValue: 1, multiplier: 100, approxMargin: 650 },
   { symbol: 'NG', name: 'Natural Gas', group: 'Energy', tickSize: 0.001, tickValue: 10, multiplier: 10000, approxMargin: 3500 },
@@ -45,6 +47,7 @@ export const FUTURES_CONTRACTS: FuturesContract[] = [
   { symbol: '6E', name: 'Euro FX', group: 'Currencies', tickSize: 0.00005, tickValue: 6.25, multiplier: 125000, approxMargin: 2900 },
   { symbol: '6J', name: 'Japanese Yen', group: 'Currencies', tickSize: 0.0000005, tickValue: 6.25, multiplier: 12500000, approxMargin: 3800 },
   { symbol: '6B', name: 'British Pound', group: 'Currencies', tickSize: 0.0001, tickValue: 6.25, multiplier: 62500, approxMargin: 2000 },
+  { symbol: 'MBT', name: 'Micro Bitcoin', group: 'Crypto', tickSize: 5, tickValue: 0.5, multiplier: 0.1, approxMargin: 1400 },
 ];
 
 const BY_SYMBOL = new Map(FUTURES_CONTRACTS.map((c) => [c.symbol, c]));

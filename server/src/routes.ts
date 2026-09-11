@@ -16,6 +16,7 @@ import {
 import { getWatchlist, addToWatchlist, removeFromWatchlist } from './watchlist.js';
 import { getRecentAlerts, WATCHED_SYMBOLS } from './patternWatcher.js';
 import { FUTURES_CONTRACTS, getContract } from './futuresContracts.js';
+import { getFuturesStats } from './futuresStats.js';
 import {
   buyFutures,
   sellFutures,
@@ -204,6 +205,14 @@ router.post('/account/reset', (_req, res) => {
 
 router.get('/futures/contracts', (_req, res) => {
   res.json(FUTURES_CONTRACTS);
+});
+
+router.get('/futures/stats', async (_req, res, next) => {
+  try {
+    res.json(await getFuturesStats());
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get('/futures/account', async (_req, res, next) => {
