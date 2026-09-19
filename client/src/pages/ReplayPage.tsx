@@ -4,6 +4,7 @@ import type { IChartApi } from 'lightweight-charts';
 import { api, type Candle, type ReplayDataset } from '../api';
 import { Chart, type HoverBar, type TradeMarker, type PositionLine } from '../components/Chart';
 import { RsiChart } from '../components/RsiChart';
+import { MacdChart } from '../components/MacdChart';
 import { computeProjection } from '../projection';
 import { formatCurrency, formatSigned, formatPercent, changeClass } from '../format';
 import { EMA_COLORS, computeEMA } from '../sma';
@@ -67,6 +68,7 @@ export function ReplayPage() {
 
   const [showProjection, setShowProjection] = useState(false);
   const [showRsi, setShowRsi] = useState(false);
+  const [showMacd, setShowMacd] = useState(false);
   const [heikinAshi, setHeikinAshi] = useState(false);
   const [mainChartApi, setMainChartApi] = useState<IChartApi | null>(null);
   const [hoverBar, setHoverBar] = useState<HoverBar | null>(null);
@@ -373,6 +375,10 @@ export function ReplayPage() {
                   RSI (14)
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
+                  <input type="checkbox" checked={showMacd} onChange={(e) => setShowMacd(e.target.checked)} />
+                  MACD (12,26,9)
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
                   <input type="checkbox" checked={heikinAshi} onChange={(e) => setHeikinAshi(e.target.checked)} />
                   Heikin-Ashi
                 </label>
@@ -460,6 +466,22 @@ export function ReplayPage() {
                 </span>
               </div>
               <RsiChart candles={visible} mainChart={mainChartApi} />
+            </div>
+          )}
+
+          {showMacd && (
+            <div className="card" style={{ marginBottom: 20 }}>
+              <div className="legend">
+                <span>
+                  <span className="legend-swatch" style={{ background: '#2f81f7' }} />
+                  MACD
+                </span>
+                <span>
+                  <span className="legend-swatch" style={{ background: '#e0a52c' }} />
+                  Signal
+                </span>
+              </div>
+              <MacdChart candles={visible} mainChart={mainChartApi} />
             </div>
           )}
         </div>
