@@ -76,6 +76,10 @@ export function ReplayPage() {
   const [recentSymbols, setRecentSymbols] = useState<string[]>(() => loadRecentSymbols());
   const [fileDatasets, setFileDatasets] = useState<ReplayDataset[]>([]);
   const [fileDataset, setFileDataset] = useState<string | null>(null);
+  // Real Webull data loads automatically whenever it exists for the active
+  // symbol -- this only becomes true when the user explicitly asks for the
+  // simulated/API feed instead (via the "Simulated" dropdown option).
+  const [useSimulated, setUseSimulated] = useState(false);
 
   // Sandboxed practice account for this replay session only.
   const [cash, setCash] = useState(SESSION_CASH);
@@ -91,6 +95,12 @@ export function ReplayPage() {
   const stockFileDatasets = fileDatasets.filter((d) => !/[FGHJKMNQUVXZ]\d{1,2}$/.test(d.symbol));
 
   const activeSymbol = (urlSymbol ?? 'AAPL').toUpperCase();
+  // Prefer the finest real-data resolution available for this symbol.
+  const preferredFileForSymbol = (symbol: string): ReplayDataset | null => {
+    const matches = stockFileDatasets.filter((d) => d.symbol === symbol);
+    if (matches.length === 0) return null;
+    return matches.find((d) => d.file.includes('5min')) ?? matches[0];
+  };
   const dataset = DATASETS[datasetIndex];
   // Live-forming candle animation: settle within a fraction of the tick
   // interval so faster speeds still animate but never fall behind.
@@ -180,11 +190,25 @@ export function ReplayPage() {
     }
   }
 
+  // Switching to a different symbol always re-checks for real data first,
+  // even if "Simulated" was picked for a previous symbol.
   useEffect(() => {
-    if (fileDataset) return; // tape is fed from an uploaded file, not the symbol/API loader
-    load(activeSymbol);
+    setUseSimulated(false);
+  }, [activeSymbol]);
+
+  useEffect(() => {
+    if (useSimulated) {
+      load(activeSymbol);
+      return;
+    }
+    const preferred = preferredFileForSymbol(activeSymbol);
+    if (preferred) {
+      loadFile(preferred.file);
+    } else {
+      load(activeSymbol);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSymbol, datasetIndex]);
+  }, [activeSymbol, datasetIndex, stockFileDatasets.length, useSimulated]);
 
   useEffect(() => {
     api.getWatchlist().then(setWatchlistSymbols).catch(() => setWatchlistSymbols([]));
@@ -321,9 +345,16 @@ export function ReplayPage() {
                 style={{ width: 200 }}
                 value={fileDataset ?? ''}
                 disabled={loading}
-                onChange={(e) => (e.target.value ? loadFile(e.target.value) : undefined)}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setUseSimulated(false);
+                    loadFile(e.target.value);
+                  } else {
+                    setUseSimulated(true);
+                  }
+                }}
               >
-                <option value="">— none (use symbol above) —</option>
+                <option value="">Simulated (no real data)</option>
                 {stockFileDatasets.map((d) => (
                   <option key={d.file} value={d.file}>
                     {d.symbol} — {d.file} ({d.rowCount} bars)

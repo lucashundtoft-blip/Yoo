@@ -51,6 +51,10 @@ export function FuturesReplayPage() {
   const [hoverBar, setHoverBar] = useState<HoverBar | null>(null);
   const [fileDatasets, setFileDatasets] = useState<ReplayDataset[]>([]);
   const [fileDataset, setFileDataset] = useState<string | null>(null);
+  // Real Webull data loads automatically whenever it exists for the active
+  // contract -- this only becomes true when the user explicitly asks for
+  // the simulated/API feed instead (via the "Simulated" dropdown option).
+  const [useSimulated, setUseSimulated] = useState(false);
 
   // Sandboxed practice account for this replay session only -- separate
   // from the real futures paper account, same as the stock replay page.
@@ -67,9 +71,16 @@ export function FuturesReplayPage() {
     contracts.some((c) => c.symbol === baseContractSymbol(d.symbol))
   );
   const activeFileDataset = futuresFileDatasets.find((d) => d.file === fileDataset) ?? null;
+  const urlContract = contracts.find((c) => c.symbol === activeSymbol) ?? null;
   const contract = fileDataset
     ? contracts.find((c) => c.symbol === baseContractSymbol(activeFileDataset?.symbol ?? '')) ?? null
-    : contracts.find((c) => c.symbol === activeSymbol) ?? null;
+    : urlContract;
+  // Prefer the finest real-data resolution available for this contract.
+  const preferredFileForSymbol = (symbol: string): ReplayDataset | null => {
+    const matches = futuresFileDatasets.filter((d) => baseContractSymbol(d.symbol) === symbol);
+    if (matches.length === 0) return null;
+    return matches.find((d) => d.file.includes('5min')) ?? matches[0];
+  };
   const dataset = DATASETS[datasetIndex];
   const tickAnimationMs = Math.min(350, (2200 / speed) * 0.35);
 
@@ -163,11 +174,26 @@ export function FuturesReplayPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Switching to a different contract always re-checks for real data first,
+  // even if "Simulated" was picked for a previous contract.
   useEffect(() => {
-    if (fileDataset) return; // tape is fed from an uploaded file, not the contract/API loader
-    loadChart();
+    setUseSimulated(false);
+  }, [activeSymbol]);
+
+  useEffect(() => {
+    if (!urlContract) return;
+    if (useSimulated) {
+      loadChart();
+      return;
+    }
+    const preferred = preferredFileForSymbol(urlContract.symbol);
+    if (preferred) {
+      loadFile(preferred.file);
+    } else {
+      loadChart();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contract?.symbol, datasetIndex]);
+  }, [urlContract?.symbol, datasetIndex, futuresFileDatasets.length, useSimulated]);
 
   function trade(side: 'BUY' | 'SELL') {
     if (!contract || !current) return;
@@ -257,9 +283,16 @@ export function FuturesReplayPage() {
                 style={{ width: 200 }}
                 value={fileDataset ?? ''}
                 disabled={loading}
-                onChange={(e) => (e.target.value ? loadFile(e.target.value) : undefined)}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    setUseSimulated(false);
+                    loadFile(e.target.value);
+                  } else {
+                    setUseSimulated(true);
+                  }
+                }}
               >
-                <option value="">— none (use contract above) —</option>
+                <option value="">Simulated (no real data)</option>
                 {futuresFileDatasets.map((d) => (
                   <option key={d.file} value={d.file}>
                     {d.symbol} — {d.file} ({d.rowCount} bars)
