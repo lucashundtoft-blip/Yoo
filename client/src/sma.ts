@@ -44,9 +44,10 @@ export function computeEMA(candles: Candle[], period: number): SmaPoint[] {
   return result;
 }
 
-// Matches Webull's EMA(5,20,200) chart header coloring exactly.
 export const EMA_COLORS: Record<number, string> = {
   5: '#f23645',
+  8: '#e91e63',
   20: '#ff9800',
+  50: '#2f81f7',
   200: '#8b939d',
 };

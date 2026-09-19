@@ -17,8 +17,8 @@ const DATASETS: { label: string; short: string; days: number; resolution: 'D' | 
 const SPEEDS = [1, 2, 5, 10];
 const WARMUP = 20;
 const SESSION_MARGIN = 50_000;
-// Fixed EMA(5,20,200) overlay, always on -- matches the rest of the app's futures charts.
-const EMA_PERIODS = [5, 20, 200];
+// Fixed EMA(5,8,20,50,200) overlay, always on.
+const EMA_PERIODS = [5, 8, 20, 50, 200];
 
 interface ReplayTrade {
   side: 'BUY' | 'SELL';
@@ -336,7 +336,7 @@ export function FuturesReplayPage() {
             />
 
             <div style={{ fontSize: 13, marginBottom: 6, fontVariantNumeric: 'tabular-nums' }}>
-              <span style={{ color: 'var(--text-dim)' }}>EMA(5,20,200)</span>{' '}
+              <span style={{ color: 'var(--text-dim)' }}>EMA(5,8,20,50,200)</span>{' '}
               {EMA_PERIODS.map((period, i) => {
                 const series = computeEMA(visible, period);
                 const latestValue = series[series.length - 1]?.value;
