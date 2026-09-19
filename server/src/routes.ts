@@ -1,6 +1,9 @@
 import { Router } from 'express';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { marketData, type Resolution } from './marketData/index.js';
 import { computeProjection } from './projection.js';
+import { listDatasets, loadCandleFile } from './marketData/csvDataEngine.js';
 import {
   buy,
   sell,
@@ -36,6 +39,33 @@ function parseResolution(value: unknown): Resolution {
   if (value === '5' || value === '60' || value === 'D') return value;
   return 'D';
 }
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const REPLAY_DATA_DIR = path.join(__dirname, '..', 'data', 'replay');
+// Bare file name only -- blocks "../" and absolute paths from escaping REPLAY_DATA_DIR.
+const SAFE_FILENAME = /^[A-Za-z0-9._-]+$/;
+
+router.get('/replay/datasets', async (_req, res, next) => {
+  try {
+    res.json(await listDatasets(REPLAY_DATA_DIR));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/replay/datasets/:file', async (req, res, next) => {
+  try {
+    const { file } = req.params;
+    if (!SAFE_FILENAME.test(file)) return res.status(400).json({ error: 'Invalid file name' });
+    const candles = await loadCandleFile(path.join(REPLAY_DATA_DIR, file));
+    res.json(candles);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return res.status(404).json({ error: 'Dataset not found' });
+    }
+    next(err);
+  }
+});
 
 router.get('/search', async (req, res, next) => {
   try {

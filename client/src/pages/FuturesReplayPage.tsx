@@ -5,6 +5,7 @@ import { Chart, type HoverBar, type TradeMarker, type PositionLine } from '../co
 import { FuturesSubNav } from '../components/FuturesSubNav';
 import { formatCurrency, formatSigned, formatPercent, changeClass } from '../format';
 import { EMA_COLORS, computeEMA } from '../sma';
+import { useTapePlayer } from '../tapePlayer';
 
 const DATASETS: { label: string; short: string; days: number; resolution: 'D' | '60' | '5' }[] = [
   { label: '1 day (5-min bars)', short: '1D', days: 1, resolution: '5' },
@@ -32,9 +33,10 @@ export function FuturesReplayPage() {
   const [contracts, setContracts] = useState<FuturesContract[]>([]);
   const [datasetIndex, setDatasetIndex] = useState(2);
   const [allCandles, setAllCandles] = useState<Candle[]>([]);
-  const [cursor, setCursor] = useState(WARMUP);
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1);
+  // Futures contracts print fast, so 1x here is deliberately closer to a
+  // readable, real-feeling pace instead of blurring past in under a second.
+  const tape = useTapePlayer(allCandles, { warmup: WARMUP, baseIntervalMs: 2200, initialSpeed: 1 });
+  const { cursor, setCursor, playing, setPlaying, speed, setSpeed, visible, current, prevBar, finished, step } = tape;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hoverBar, setHoverBar] = useState<HoverBar | null>(null);
@@ -50,19 +52,11 @@ export function FuturesReplayPage() {
   const activeSymbol = (urlSymbol ?? 'MES').toUpperCase();
   const contract = contracts.find((c) => c.symbol === activeSymbol) ?? null;
   const dataset = DATASETS[datasetIndex];
-  // Base bar interval is slower than the stock replay's -- futures contracts
-  // print fast, so 1x here is deliberately closer to a readable, real-feeling
-  // pace instead of blurring past in under a second.
-  const BASE_INTERVAL_MS = 2200;
-  const tickAnimationMs = Math.min(350, (BASE_INTERVAL_MS / speed) * 0.35);
+  const tickAnimationMs = Math.min(350, (2200 / speed) * 0.35);
 
-  const visible = useMemo(() => allCandles.slice(0, cursor), [allCandles, cursor]);
-  const current = visible[visible.length - 1] ?? null;
-  const prevBar = visible[visible.length - 2] ?? null;
   const price = current?.close ?? 0;
   const tickChange = current && prevBar ? current.close - prevBar.close : 0;
   const tickChangePercent = current && prevBar && prevBar.close ? (tickChange / prevBar.close) * 100 : 0;
-  const finished = allCandles.length > 0 && cursor >= allCandles.length;
 
   const displayBar: HoverBar | null =
     hoverBar ??
@@ -89,8 +83,7 @@ export function FuturesReplayPage() {
     setAvgPrice(0);
     setRealizedPL(0);
     setTrades([]);
-    setCursor(WARMUP);
-    setPlaying(false);
+    tape.reset();
     setHoverBar(null);
   }
 
@@ -132,20 +125,6 @@ export function FuturesReplayPage() {
     loadChart();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contract?.symbol, datasetIndex]);
-
-  useEffect(() => {
-    if (!playing) return;
-    const interval = setInterval(() => {
-      setCursor((c) => {
-        if (c >= allCandles.length) {
-          setPlaying(false);
-          return c;
-        }
-        return c + 1;
-      });
-    }, BASE_INTERVAL_MS / speed);
-    return () => clearInterval(interval);
-  }, [playing, speed, allCandles.length]);
 
   function trade(side: 'BUY' | 'SELL') {
     if (!contract || !current) return;
@@ -243,7 +222,7 @@ export function FuturesReplayPage() {
                 </button>
                 <button
                   className="btn btn-secondary"
-                  onClick={() => setCursor((c) => Math.min(c + 1, allCandles.length))}
+                  onClick={step}
                   disabled={finished || !allCandles.length}
                 >
                   Step ›

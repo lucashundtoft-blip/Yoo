@@ -160,6 +160,14 @@ export interface FuturesBracketOrder {
   filledLeg: 'TP' | 'SL' | null;
 }
 
+export interface ReplayDataset {
+  file: string;
+  symbol: string;
+  extension: 'csv' | 'json' | 'jsonl';
+  rowCount: number;
+  sizeBytes: number;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json' },
@@ -239,4 +247,6 @@ export const api = {
     request<FuturesBracketOrder[]>(`/futures/brackets${symbol ? `?symbol=${encodeURIComponent(symbol)}` : ''}`),
   cancelFuturesBracket: (id: number) => request<{ ok: boolean }>(`/futures/brackets/${id}`, { method: 'DELETE' }),
   resetFuturesAccount: () => request<{ ok: boolean }>('/futures/account/reset', { method: 'POST' }),
+  getReplayDatasets: () => request<ReplayDataset[]>('/replay/datasets'),
+  getReplayDatasetCandles: (file: string) => request<Candle[]>(`/replay/datasets/${encodeURIComponent(file)}`),
 };

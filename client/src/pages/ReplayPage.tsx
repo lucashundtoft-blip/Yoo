@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { IChartApi } from 'lightweight-charts';
-import { api, type Candle } from '../api';
+import { api, type Candle, type ReplayDataset } from '../api';
 import { Chart, type HoverBar, type TradeMarker, type PositionLine } from '../components/Chart';
 import { RsiChart } from '../components/RsiChart';
+import { MacdChart } from '../components/MacdChart';
 import { computeProjection } from '../projection';
 import { formatCurrency, formatSigned, formatPercent, changeClass } from '../format';
 import { EMA_COLORS, computeEMA } from '../sma';
+import { useTapePlayer } from '../tapePlayer';
 
 // Fixed EMA(5,20,200) overlay, always on -- matches Webull's default chart header.
 const EMA_PERIODS = [5, 20, 200];
@@ -59,19 +61,21 @@ export function ReplayPage() {
   const [symbolInput, setSymbolInput] = useState(urlSymbol ?? 'AAPL');
   const [datasetIndex, setDatasetIndex] = useState(2);
   const [allCandles, setAllCandles] = useState<Candle[]>([]);
-  const [cursor, setCursor] = useState(WARMUP);
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(2);
+  const tape = useTapePlayer(allCandles, { warmup: WARMUP, baseIntervalMs: 1000, initialSpeed: 2 });
+  const { cursor, setCursor, playing, setPlaying, speed, setSpeed, visible, current, prevBar, finished, step } = tape;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [showProjection, setShowProjection] = useState(false);
   const [showRsi, setShowRsi] = useState(false);
+  const [showMacd, setShowMacd] = useState(false);
   const [heikinAshi, setHeikinAshi] = useState(false);
   const [mainChartApi, setMainChartApi] = useState<IChartApi | null>(null);
   const [hoverBar, setHoverBar] = useState<HoverBar | null>(null);
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>([]);
   const [recentSymbols, setRecentSymbols] = useState<string[]>(() => loadRecentSymbols());
+  const [fileDatasets, setFileDatasets] = useState<ReplayDataset[]>([]);
+  const [fileDataset, setFileDataset] = useState<string | null>(null);
 
   // Sandboxed practice account for this replay session only.
   const [cash, setCash] = useState(SESSION_CASH);
@@ -87,13 +91,9 @@ export function ReplayPage() {
   // interval so faster speeds still animate but never fall behind.
   const tickAnimationMs = Math.min(350, (1000 / speed) * 0.75);
 
-  const visible = useMemo(() => allCandles.slice(0, cursor), [allCandles, cursor]);
-  const current = visible[visible.length - 1] ?? null;
-  const prevBar = visible[visible.length - 2] ?? null;
   const price = current?.close ?? 0;
   const tickChange = current && prevBar ? current.close - prevBar.close : 0;
   const tickChangePercent = current && prevBar && prevBar.close ? (tickChange / prevBar.close) * 100 : 0;
-  const finished = allCandles.length > 0 && cursor >= allCandles.length;
 
   const rangeLow = visible.length ? Math.min(...visible.map((c) => c.low)) : 0;
   const rangeHigh = visible.length ? Math.max(...visible.map((c) => c.high)) : 0;
@@ -135,6 +135,7 @@ export function ReplayPage() {
     setLoading(true);
     setError(null);
     setPlaying(false);
+    setFileDataset(null);
     try {
       const candles = await api.getCandles(s, dataset.resolution, dataset.days);
       if (candles.length < WARMUP + 5) {
@@ -153,31 +154,40 @@ export function ReplayPage() {
     }
   }
 
+  async function loadFile(file: string) {
+    setLoading(true);
+    setError(null);
+    setPlaying(false);
+    try {
+      const candles = await api.getReplayDatasetCandles(file);
+      if (candles.length < WARMUP + 5) {
+        setError('Not enough rows in this data file for a replay.');
+        setAllCandles([]);
+      } else {
+        setAllCandles(candles);
+        resetSession();
+        setFileDataset(file);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load data file');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
+    if (fileDataset) return; // tape is fed from an uploaded file, not the symbol/API loader
     load(activeSymbol);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSymbol, datasetIndex]);
 
   useEffect(() => {
     api.getWatchlist().then(setWatchlistSymbols).catch(() => setWatchlistSymbols([]));
+    api.getReplayDatasets().then(setFileDatasets).catch(() => setFileDatasets([]));
   }, []);
 
   const tickerChips =
     recentSymbols.length > 0 ? recentSymbols : watchlistSymbols.length > 0 ? watchlistSymbols : FALLBACK_TICKERS;
-
-  useEffect(() => {
-    if (!playing) return;
-    const interval = setInterval(() => {
-      setCursor((c) => {
-        if (c >= allCandles.length) {
-          setPlaying(false);
-          return c;
-        }
-        return c + 1;
-      });
-    }, 1000 / speed);
-    return () => clearInterval(interval);
-  }, [playing, speed, allCandles.length]);
 
   function trade(side: 'BUY' | 'SELL') {
     const n = Math.floor(Number(orderQty));
@@ -217,7 +227,9 @@ export function ReplayPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0 }}>Market Replay — {activeSymbol}</h2>
+          <h2 style={{ margin: 0 }}>
+            Market Replay — {fileDataset ? fileDatasets.find((d) => d.file === fileDataset)?.symbol ?? activeSymbol : activeSymbol}
+          </h2>
           {current && (
             <div style={{ marginTop: 6, display: 'flex', alignItems: 'baseline', gap: 12 }}>
               <span style={{ fontSize: 36, fontWeight: 800 }}>{formatCurrency(price)}</span>
@@ -288,12 +300,33 @@ export function ReplayPage() {
                 className="btn btn-secondary"
                 style={{ padding: '4px 10px', fontSize: 12, fontWeight: 700 }}
                 onClick={() => navigate(`/replay/${sym}`)}
-                disabled={sym === activeSymbol}
+                disabled={fileDataset === null && sym === activeSymbol}
               >
                 {sym}
               </button>
             ))}
           </div>
+          {fileDatasets.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Data file
+              </span>
+              <select
+                className="search-input"
+                style={{ width: 200 }}
+                value={fileDataset ?? ''}
+                disabled={loading}
+                onChange={(e) => (e.target.value ? loadFile(e.target.value) : undefined)}
+              >
+                <option value="">— none (use symbol above) —</option>
+                {fileDatasets.map((d) => (
+                  <option key={d.file} value={d.file}>
+                    {d.symbol} — {d.file} ({d.rowCount} bars)
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -316,7 +349,7 @@ export function ReplayPage() {
                 </button>
                 <button
                   className="btn btn-secondary"
-                  onClick={() => setCursor((c) => Math.min(c + 1, allCandles.length))}
+                  onClick={step}
                   disabled={finished || !allCandles.length}
                 >
                   Step ›
@@ -340,6 +373,10 @@ export function ReplayPage() {
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
                   <input type="checkbox" checked={showRsi} onChange={(e) => setShowRsi(e.target.checked)} />
                   RSI (14)
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
+                  <input type="checkbox" checked={showMacd} onChange={(e) => setShowMacd(e.target.checked)} />
+                  MACD (12,26,9)
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-dim)' }}>
                   <input type="checkbox" checked={heikinAshi} onChange={(e) => setHeikinAshi(e.target.checked)} />
@@ -429,6 +466,22 @@ export function ReplayPage() {
                 </span>
               </div>
               <RsiChart candles={visible} mainChart={mainChartApi} />
+            </div>
+          )}
+
+          {showMacd && (
+            <div className="card" style={{ marginBottom: 20 }}>
+              <div className="legend">
+                <span>
+                  <span className="legend-swatch" style={{ background: '#2f81f7' }} />
+                  MACD
+                </span>
+                <span>
+                  <span className="legend-swatch" style={{ background: '#e0a52c' }} />
+                  Signal
+                </span>
+              </div>
+              <MacdChart candles={visible} mainChart={mainChartApi} />
             </div>
           )}
         </div>
