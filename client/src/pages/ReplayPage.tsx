@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { IChartApi } from 'lightweight-charts';
-import { api, type Candle } from '../api';
+import { api, type Candle, type ReplayDataset } from '../api';
 import { Chart, type HoverBar, type TradeMarker, type PositionLine } from '../components/Chart';
 import { RsiChart } from '../components/RsiChart';
 import { computeProjection } from '../projection';
@@ -72,6 +72,8 @@ export function ReplayPage() {
   const [hoverBar, setHoverBar] = useState<HoverBar | null>(null);
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>([]);
   const [recentSymbols, setRecentSymbols] = useState<string[]>(() => loadRecentSymbols());
+  const [fileDatasets, setFileDatasets] = useState<ReplayDataset[]>([]);
+  const [fileDataset, setFileDataset] = useState<string | null>(null);
 
   // Sandboxed practice account for this replay session only.
   const [cash, setCash] = useState(SESSION_CASH);
@@ -135,6 +137,7 @@ export function ReplayPage() {
     setLoading(true);
     setError(null);
     setPlaying(false);
+    setFileDataset(null);
     try {
       const candles = await api.getCandles(s, dataset.resolution, dataset.days);
       if (candles.length < WARMUP + 5) {
@@ -153,13 +156,36 @@ export function ReplayPage() {
     }
   }
 
+  async function loadFile(file: string) {
+    setLoading(true);
+    setError(null);
+    setPlaying(false);
+    try {
+      const candles = await api.getReplayDatasetCandles(file);
+      if (candles.length < WARMUP + 5) {
+        setError('Not enough rows in this data file for a replay.');
+        setAllCandles([]);
+      } else {
+        setAllCandles(candles);
+        resetSession();
+        setFileDataset(file);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load data file');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
+    if (fileDataset) return; // tape is fed from an uploaded file, not the symbol/API loader
     load(activeSymbol);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSymbol, datasetIndex]);
 
   useEffect(() => {
     api.getWatchlist().then(setWatchlistSymbols).catch(() => setWatchlistSymbols([]));
+    api.getReplayDatasets().then(setFileDatasets).catch(() => setFileDatasets([]));
   }, []);
 
   const tickerChips =
@@ -217,7 +243,9 @@ export function ReplayPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0 }}>Market Replay — {activeSymbol}</h2>
+          <h2 style={{ margin: 0 }}>
+            Market Replay — {fileDataset ? fileDatasets.find((d) => d.file === fileDataset)?.symbol ?? activeSymbol : activeSymbol}
+          </h2>
           {current && (
             <div style={{ marginTop: 6, display: 'flex', alignItems: 'baseline', gap: 12 }}>
               <span style={{ fontSize: 36, fontWeight: 800 }}>{formatCurrency(price)}</span>
@@ -288,12 +316,33 @@ export function ReplayPage() {
                 className="btn btn-secondary"
                 style={{ padding: '4px 10px', fontSize: 12, fontWeight: 700 }}
                 onClick={() => navigate(`/replay/${sym}`)}
-                disabled={sym === activeSymbol}
+                disabled={fileDataset === null && sym === activeSymbol}
               >
                 {sym}
               </button>
             ))}
           </div>
+          {fileDatasets.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Data file
+              </span>
+              <select
+                className="search-input"
+                style={{ width: 200 }}
+                value={fileDataset ?? ''}
+                disabled={loading}
+                onChange={(e) => (e.target.value ? loadFile(e.target.value) : undefined)}
+              >
+                <option value="">— none (use symbol above) —</option>
+                {fileDatasets.map((d) => (
+                  <option key={d.file} value={d.file}>
+                    {d.symbol} — {d.file} ({d.rowCount} bars)
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
