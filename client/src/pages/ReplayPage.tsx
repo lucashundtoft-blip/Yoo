@@ -10,8 +10,8 @@ import { formatCurrency, formatSigned, formatPercent, changeClass } from '../for
 import { EMA_COLORS, computeEMA } from '../sma';
 import { useTapePlayer } from '../tapePlayer';
 
-// Fixed EMA(5,20,200) overlay, always on -- matches Webull's default chart header.
-const EMA_PERIODS = [5, 20, 200];
+// Fixed EMA(5,8,20,50,200) overlay, always on.
+const EMA_PERIODS = [5, 8, 20, 50, 200];
 
 const DATASETS: { label: string; short: string; days: number; resolution: 'D' | '60' | '5' }[] = [
   { label: '1 day (5-min bars)', short: '1D', days: 1, resolution: '5' },
@@ -419,7 +419,7 @@ export function ReplayPage() {
             />
 
             <div style={{ fontSize: 13, marginBottom: 6, fontVariantNumeric: 'tabular-nums' }}>
-              <span style={{ color: 'var(--text-dim)' }}>EMA(5,20,200)</span>{' '}
+              <span style={{ color: 'var(--text-dim)' }}>EMA(5,8,20,50,200)</span>{' '}
               {EMA_PERIODS.map((period, i) => {
                 const series = computeEMA(visible, period);
                 const latestValue = series[series.length - 1]?.value;
