@@ -7,6 +7,7 @@ import { RsiChart } from '../components/RsiChart';
 import { computeProjection } from '../projection';
 import { formatCurrency, formatSigned, formatPercent, changeClass } from '../format';
 import { EMA_COLORS, computeEMA } from '../sma';
+import { useTapePlayer } from '../tapePlayer';
 
 // Fixed EMA(5,20,200) overlay, always on -- matches Webull's default chart header.
 const EMA_PERIODS = [5, 20, 200];
@@ -59,9 +60,8 @@ export function ReplayPage() {
   const [symbolInput, setSymbolInput] = useState(urlSymbol ?? 'AAPL');
   const [datasetIndex, setDatasetIndex] = useState(2);
   const [allCandles, setAllCandles] = useState<Candle[]>([]);
-  const [cursor, setCursor] = useState(WARMUP);
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(2);
+  const tape = useTapePlayer(allCandles, { warmup: WARMUP, baseIntervalMs: 1000, initialSpeed: 2 });
+  const { cursor, setCursor, playing, setPlaying, speed, setSpeed, visible, current, prevBar, finished, step } = tape;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,13 +89,9 @@ export function ReplayPage() {
   // interval so faster speeds still animate but never fall behind.
   const tickAnimationMs = Math.min(350, (1000 / speed) * 0.75);
 
-  const visible = useMemo(() => allCandles.slice(0, cursor), [allCandles, cursor]);
-  const current = visible[visible.length - 1] ?? null;
-  const prevBar = visible[visible.length - 2] ?? null;
   const price = current?.close ?? 0;
   const tickChange = current && prevBar ? current.close - prevBar.close : 0;
   const tickChangePercent = current && prevBar && prevBar.close ? (tickChange / prevBar.close) * 100 : 0;
-  const finished = allCandles.length > 0 && cursor >= allCandles.length;
 
   const rangeLow = visible.length ? Math.min(...visible.map((c) => c.low)) : 0;
   const rangeHigh = visible.length ? Math.max(...visible.map((c) => c.high)) : 0;
@@ -190,20 +186,6 @@ export function ReplayPage() {
 
   const tickerChips =
     recentSymbols.length > 0 ? recentSymbols : watchlistSymbols.length > 0 ? watchlistSymbols : FALLBACK_TICKERS;
-
-  useEffect(() => {
-    if (!playing) return;
-    const interval = setInterval(() => {
-      setCursor((c) => {
-        if (c >= allCandles.length) {
-          setPlaying(false);
-          return c;
-        }
-        return c + 1;
-      });
-    }, 1000 / speed);
-    return () => clearInterval(interval);
-  }, [playing, speed, allCandles.length]);
 
   function trade(side: 'BUY' | 'SELL') {
     const n = Math.floor(Number(orderQty));
@@ -365,7 +347,7 @@ export function ReplayPage() {
                 </button>
                 <button
                   className="btn btn-secondary"
-                  onClick={() => setCursor((c) => Math.min(c + 1, allCandles.length))}
+                  onClick={step}
                   disabled={finished || !allCandles.length}
                 >
                   Step ›
