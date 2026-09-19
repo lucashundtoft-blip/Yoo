@@ -85,6 +85,11 @@ export function ReplayPage() {
   const [trades, setTrades] = useState<ReplayTrade[]>([]);
   const [orderQty, setOrderQty] = useState('10');
 
+  // Futures front-month symbols (e.g. "MESZ6") end in a CME month code letter
+  // + year digit(s) -- real stock tickers never do, so exclude them here;
+  // they show up in the Futures Replay page's own data-file picker instead.
+  const stockFileDatasets = fileDatasets.filter((d) => !/[FGHJKMNQUVXZ]\d{1,2}$/.test(d.symbol));
+
   const activeSymbol = (urlSymbol ?? 'AAPL').toUpperCase();
   const dataset = DATASETS[datasetIndex];
   // Live-forming candle animation: settle within a fraction of the tick
@@ -306,7 +311,7 @@ export function ReplayPage() {
               </button>
             ))}
           </div>
-          {fileDatasets.length > 0 && (
+          {stockFileDatasets.length > 0 && (
             <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
               <span style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                 Data file
@@ -319,7 +324,7 @@ export function ReplayPage() {
                 onChange={(e) => (e.target.value ? loadFile(e.target.value) : undefined)}
               >
                 <option value="">— none (use symbol above) —</option>
-                {fileDatasets.map((d) => (
+                {stockFileDatasets.map((d) => (
                   <option key={d.file} value={d.file}>
                     {d.symbol} — {d.file} ({d.rowCount} bars)
                   </option>

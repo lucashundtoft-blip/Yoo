@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { api, type Candle, type FuturesContract } from '../api';
+import { api, type Candle, type FuturesContract, type ReplayDataset } from '../api';
 import { Chart, type HoverBar, type TradeMarker, type PositionLine } from '../components/Chart';
 import { FuturesSubNav } from '../components/FuturesSubNav';
 import { formatCurrency, formatSigned, formatPercent, changeClass } from '../format';
@@ -27,6 +27,15 @@ interface ReplayTrade {
   time: number;
 }
 
+// Front-month contract symbols (e.g. "MESZ6") carry a CME month code letter
+// + year digit(s) suffix on top of the base product code -- strip it to
+// look the contract spec (tick size, margin, multiplier) up in FUTURES_CONTRACTS.
+const CME_MONTH_CODES = 'FGHJKMNQUVXZ';
+function baseContractSymbol(symbol: string): string {
+  const match = symbol.match(new RegExp(`^(.+?)[${CME_MONTH_CODES}]\\d{1,2}$`));
+  return match ? match[1] : symbol;
+}
+
 export function FuturesReplayPage() {
   const { symbol: urlSymbol } = useParams();
   const navigate = useNavigate();
@@ -40,6 +49,8 @@ export function FuturesReplayPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hoverBar, setHoverBar] = useState<HoverBar | null>(null);
+  const [fileDatasets, setFileDatasets] = useState<ReplayDataset[]>([]);
+  const [fileDataset, setFileDataset] = useState<string | null>(null);
 
   // Sandboxed practice account for this replay session only -- separate
   // from the real futures paper account, same as the stock replay page.
@@ -50,7 +61,15 @@ export function FuturesReplayPage() {
   const [orderQty, setOrderQty] = useState('1');
 
   const activeSymbol = (urlSymbol ?? 'MES').toUpperCase();
-  const contract = contracts.find((c) => c.symbol === activeSymbol) ?? null;
+  // Only offer data files whose symbol maps to a known futures contract --
+  // stock replay CSVs (AAPL, TSLA, ...) live in the same directory but don't belong here.
+  const futuresFileDatasets = fileDatasets.filter((d) =>
+    contracts.some((c) => c.symbol === baseContractSymbol(d.symbol))
+  );
+  const activeFileDataset = futuresFileDatasets.find((d) => d.file === fileDataset) ?? null;
+  const contract = fileDataset
+    ? contracts.find((c) => c.symbol === baseContractSymbol(activeFileDataset?.symbol ?? '')) ?? null
+    : contracts.find((c) => c.symbol === activeSymbol) ?? null;
   const dataset = DATASETS[datasetIndex];
   const tickAnimationMs = Math.min(350, (2200 / speed) * 0.35);
 
@@ -100,6 +119,7 @@ export function FuturesReplayPage() {
     setLoading(true);
     setError(null);
     setPlaying(false);
+    setFileDataset(null);
     try {
       const candles = await api.getCandles(contract.symbol, dataset.resolution, dataset.days);
       if (candles.length < WARMUP + 5) {
@@ -116,12 +136,35 @@ export function FuturesReplayPage() {
     }
   }
 
+  async function loadFile(file: string) {
+    setLoading(true);
+    setError(null);
+    setPlaying(false);
+    try {
+      const candles = await api.getReplayDatasetCandles(file);
+      if (candles.length < WARMUP + 5) {
+        setError('Not enough rows in this data file for a replay.');
+        setAllCandles([]);
+      } else {
+        setAllCandles(candles);
+        resetSession();
+        setFileDataset(file);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load data file');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
     loadContracts();
+    api.getReplayDatasets().then(setFileDatasets).catch(() => setFileDatasets([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    if (fileDataset) return; // tape is fed from an uploaded file, not the contract/API loader
     loadChart();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contract?.symbol, datasetIndex]);
@@ -177,7 +220,7 @@ export function FuturesReplayPage() {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0 }}>Futures Replay — {contract?.symbol ?? activeSymbol}</h2>
+          <h2 style={{ margin: 0 }}>Futures Replay — {fileDataset ? activeFileDataset?.symbol ?? activeSymbol : contract?.symbol ?? activeSymbol}</h2>
           {current && (
             <div style={{ marginTop: 6, display: 'flex', alignItems: 'baseline', gap: 12 }}>
               <span style={{ fontSize: 36, fontWeight: 800 }}>{formatCurrency(price)}</span>
@@ -190,18 +233,41 @@ export function FuturesReplayPage() {
             Practice on past futures price action, bar by bar, with a fresh {formatCurrency(SESSION_MARGIN, 0)} practice margin account per session.
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: 320 }}>
-          {contracts.map((c) => (
-            <button
-              key={c.symbol}
-              className="btn btn-secondary"
-              style={{ padding: '4px 10px', fontSize: 12, fontWeight: 700 }}
-              onClick={() => navigate(`/futures-replay/${c.symbol}`)}
-              disabled={c.symbol === activeSymbol}
-            >
-              {c.symbol}
-            </button>
-          ))}
+        <div style={{ maxWidth: 340 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {contracts.map((c) => (
+              <button
+                key={c.symbol}
+                className="btn btn-secondary"
+                style={{ padding: '4px 10px', fontSize: 12, fontWeight: 700 }}
+                onClick={() => navigate(`/futures-replay/${c.symbol}`)}
+                disabled={fileDataset === null && c.symbol === activeSymbol}
+              >
+                {c.symbol}
+              </button>
+            ))}
+          </div>
+          {futuresFileDatasets.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Data file
+              </span>
+              <select
+                className="search-input"
+                style={{ width: 200 }}
+                value={fileDataset ?? ''}
+                disabled={loading}
+                onChange={(e) => (e.target.value ? loadFile(e.target.value) : undefined)}
+              >
+                <option value="">— none (use contract above) —</option>
+                {futuresFileDatasets.map((d) => (
+                  <option key={d.file} value={d.file}>
+                    {d.symbol} — {d.file} ({d.rowCount} bars)
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
