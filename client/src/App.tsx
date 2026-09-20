@@ -1,11 +1,5 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { NavBar } from './components/NavBar';
-import { WatchlistPage } from './pages/WatchlistPage';
-import { StockDetailPage } from './pages/StockDetailPage';
-import { PortfolioPage } from './pages/PortfolioPage';
-import { OrdersPage } from './pages/OrdersPage';
-import { ReplayPage } from './pages/ReplayPage';
-import { TrendGamePage } from './pages/TrendGamePage';
 import { FuturesHeatmapPage } from './pages/FuturesHeatmapPage';
 import { FuturesDetailPage } from './pages/FuturesDetailPage';
 import { FuturesPortfolioPage } from './pages/FuturesPortfolioPage';
@@ -20,13 +14,7 @@ function App() {
         <NavBar />
         <main className="main-content">
           <Routes>
-            <Route path="/" element={<WatchlistPage />} />
-            <Route path="/stock/:symbol" element={<StockDetailPage />} />
-            <Route path="/portfolio" element={<PortfolioPage />} />
-            <Route path="/orders" element={<OrdersPage />} />
-            <Route path="/replay" element={<ReplayPage />} />
-            <Route path="/replay/:symbol" element={<ReplayPage />} />
-            <Route path="/replay/:symbol/game" element={<TrendGamePage />} />
+            <Route path="/" element={<Navigate to="/futures" replace />} />
             <Route path="/futures" element={<FuturesHeatmapPage />} />
             <Route path="/futures/:symbol" element={<FuturesDetailPage />} />
             <Route path="/futures-guide" element={<FuturesGuidePage />} />

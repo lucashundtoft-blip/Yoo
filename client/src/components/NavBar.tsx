@@ -1,12 +1,7 @@
 import { NavLink } from 'react-router-dom';
-import { SearchBar } from './SearchBar';
-import { WatchlistIcon, PortfolioIcon, OrdersIcon, ReplayIcon, FuturesIcon, AlertsIcon } from './TabIcons';
+import { FuturesIcon, AlertsIcon } from './TabIcons';
 
 const TABS = [
-  { to: '/', end: true, label: 'Watchlist', Icon: WatchlistIcon },
-  { to: '/portfolio', end: false, label: 'Portfolio', Icon: PortfolioIcon },
-  { to: '/orders', end: false, label: 'Orders', Icon: OrdersIcon },
-  { to: '/replay', end: false, label: 'Replay', Icon: ReplayIcon },
   { to: '/futures', end: false, label: 'Futures', Icon: FuturesIcon },
   { to: '/alerts', end: false, label: 'Alerts', Icon: AlertsIcon },
 ];
@@ -25,7 +20,6 @@ export function NavBar() {
             </NavLink>
           ))}
         </nav>
-        <SearchBar />
       </header>
 
       <nav className="bottom-tabs">

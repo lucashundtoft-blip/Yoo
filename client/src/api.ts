@@ -1,8 +1,3 @@
-export interface SearchResult {
-  symbol: string;
-  name: string;
-}
-
 export interface Quote {
   symbol: string;
   price: number;
@@ -37,35 +32,6 @@ export interface Projection {
   direction: 'up' | 'down' | 'flat';
 }
 
-export interface Position {
-  symbol: string;
-  quantity: number;
-  avgCost: number;
-  marketPrice: number;
-  marketValue: number;
-  costBasis: number;
-  unrealizedPL: number;
-  unrealizedPLPercent: number;
-}
-
-export interface Portfolio {
-  cash: number;
-  positions: Position[];
-  holdingsValue: number;
-  totalValue: number;
-  totalUnrealizedPL: number;
-}
-
-export interface Order {
-  id: number;
-  symbol: string;
-  side: 'BUY' | 'SELL';
-  quantity: number;
-  price: number;
-  total: number;
-  createdAt: string;
-}
-
 export interface PatternAlert {
   id: number;
   symbol: string;
@@ -78,19 +44,6 @@ export interface PatternAlert {
 export interface AlertsResponse {
   symbols: string[];
   alerts: PatternAlert[];
-}
-
-export interface BracketOrder {
-  id: number;
-  symbol: string;
-  quantity: number;
-  takeProfitPrice: number | null;
-  stopLossPrice: number | null;
-  status: 'ACTIVE' | 'FILLED' | 'CANCELLED';
-  createdAt: string;
-  filledAt: string | null;
-  filledPrice: number | null;
-  filledLeg: 'TP' | 'SL' | null;
 }
 
 export interface FuturesContract {
@@ -181,7 +134,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  search: (q: string) => request<SearchResult[]>(`/search?q=${encodeURIComponent(q)}`),
   getQuote: (symbol: string) => request<Quote>(`/quote/${encodeURIComponent(symbol)}`),
   getCandles: (symbol: string, resolution: 'D' | '60' | '5' = 'D', days = 180) =>
     request<Candle[]>(`/candles/${encodeURIComponent(symbol)}?resolution=${resolution}&days=${days}`),
@@ -197,28 +149,6 @@ export const api = {
     if (forecastPeriods) params.set('forecastPeriods', String(forecastPeriods));
     return request<Projection>(`/projection/${encodeURIComponent(symbol)}?${params}`);
   },
-  getWatchlist: () => request<string[]>('/watchlist'),
-  addToWatchlist: (symbol: string) =>
-    request<string[]>('/watchlist', { method: 'POST', body: JSON.stringify({ symbol }) }),
-  removeFromWatchlist: (symbol: string) =>
-    request<string[]>(`/watchlist/${encodeURIComponent(symbol)}`, { method: 'DELETE' }),
-  getPortfolio: () => request<Portfolio>('/portfolio'),
-  getOrders: () => request<Order[]>('/orders'),
-  placeOrder: (
-    symbol: string,
-    side: 'BUY' | 'SELL',
-    quantity: number,
-    takeProfitPrice?: number | null,
-    stopLossPrice?: number | null
-  ) =>
-    request<Order>('/orders', {
-      method: 'POST',
-      body: JSON.stringify({ symbol, side, quantity, takeProfitPrice, stopLossPrice }),
-    }),
-  getBrackets: (symbol?: string) =>
-    request<BracketOrder[]>(`/brackets${symbol ? `?symbol=${encodeURIComponent(symbol)}` : ''}`),
-  cancelBracket: (id: number) => request<{ ok: boolean }>(`/brackets/${id}`, { method: 'DELETE' }),
-  resetAccount: () => request<{ ok: boolean }>('/account/reset', { method: 'POST' }),
   getHealth: () =>
     request<{
       ok: boolean;
