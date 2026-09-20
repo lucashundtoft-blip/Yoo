@@ -4,19 +4,6 @@ import { fileURLToPath } from 'node:url';
 import { marketData, type Resolution } from './marketData/index.js';
 import { computeProjection } from './projection.js';
 import { listDatasets, loadCandleFile } from './marketData/csvDataEngine.js';
-import {
-  buy,
-  sell,
-  getCash,
-  getPositions,
-  getOrders,
-  resetAccount,
-  createBracket,
-  getActiveBrackets,
-  cancelBracket,
-  TradingError,
-} from './trading.js';
-import { getWatchlist, addToWatchlist, removeFromWatchlist } from './watchlist.js';
 import { getRecentAlerts, WATCHED_SYMBOLS } from './patternWatcher.js';
 import { FUTURES_CONTRACTS, getContract } from './futuresContracts.js';
 import { getFuturesStats } from './futuresStats.js';
@@ -67,16 +54,6 @@ router.get('/replay/datasets/:file', async (req, res, next) => {
   }
 });
 
-router.get('/search', async (req, res, next) => {
-  try {
-    const q = String(req.query.q ?? '');
-    const results = await marketData.search(q);
-    res.json(results);
-  } catch (err) {
-    next(err);
-  }
-});
-
 router.get('/quote/:symbol', async (req, res, next) => {
   try {
     const quote = await marketData.getQuote(req.params.symbol);
@@ -111,126 +88,9 @@ router.get('/projection/:symbol', async (req, res, next) => {
   }
 });
 
-router.get('/watchlist', (_req, res) => {
-  res.json(getWatchlist());
-});
-
-router.post('/watchlist', (req, res) => {
-  const symbol = String(req.body?.symbol ?? '').trim();
-  if (!symbol) return res.status(400).json({ error: 'symbol is required' });
-  addToWatchlist(symbol);
-  res.json(getWatchlist());
-});
-
-router.delete('/watchlist/:symbol', (req, res) => {
-  removeFromWatchlist(req.params.symbol);
-  res.json(getWatchlist());
-});
-
-router.get('/portfolio', async (_req, res, next) => {
-  try {
-    const cash = getCash();
-    const positions = getPositions();
-    const quotes = await Promise.all(
-      positions.map((p) => marketData.getQuote(p.symbol).catch(() => null))
-    );
-    const enriched = positions.map((p, i) => {
-      const quote = quotes[i];
-      const marketPrice = quote?.price ?? p.avgCost;
-      const marketValue = marketPrice * p.quantity;
-      const costBasis = p.avgCost * p.quantity;
-      return {
-        ...p,
-        marketPrice,
-        marketValue,
-        costBasis,
-        unrealizedPL: marketValue - costBasis,
-        unrealizedPLPercent: costBasis ? ((marketValue - costBasis) / costBasis) * 100 : 0,
-      };
-    });
-    const holdingsValue = enriched.reduce((sum, p) => sum + p.marketValue, 0);
-    const totalCostBasis = enriched.reduce((sum, p) => sum + p.costBasis, 0);
-    res.json({
-      cash,
-      positions: enriched,
-      holdingsValue,
-      totalValue: cash + holdingsValue,
-      totalUnrealizedPL: holdingsValue - totalCostBasis,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.get('/orders', (_req, res) => {
-  res.json(getOrders());
-});
-
-router.post('/orders', async (req, res, next) => {
-  try {
-    const symbol = String(req.body?.symbol ?? '').trim();
-    const side = String(req.body?.side ?? '').toUpperCase();
-    const quantity = Number(req.body?.quantity);
-    if (!symbol) return res.status(400).json({ error: 'symbol is required' });
-    if (side !== 'BUY' && side !== 'SELL') return res.status(400).json({ error: 'side must be BUY or SELL' });
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      return res.status(400).json({ error: 'quantity must be a positive number' });
-    }
-
-    const takeProfitPrice = req.body?.takeProfitPrice != null ? Number(req.body.takeProfitPrice) : null;
-    const stopLossPrice = req.body?.stopLossPrice != null ? Number(req.body.stopLossPrice) : null;
-    if (side === 'BUY' && takeProfitPrice != null && !(takeProfitPrice > 0)) {
-      return res.status(400).json({ error: 'takeProfitPrice must be a positive number' });
-    }
-    if (side === 'BUY' && stopLossPrice != null && !(stopLossPrice > 0)) {
-      return res.status(400).json({ error: 'stopLossPrice must be a positive number' });
-    }
-
-    const quote = await marketData.getQuote(symbol);
-
-    if (side === 'BUY' && takeProfitPrice != null && takeProfitPrice <= quote.price) {
-      return res.status(400).json({ error: 'takeProfitPrice must be above the current price for a long position' });
-    }
-    if (side === 'BUY' && stopLossPrice != null && stopLossPrice >= quote.price) {
-      return res.status(400).json({ error: 'stopLossPrice must be below the current price for a long position' });
-    }
-
-    const order = side === 'BUY' ? buy(symbol, quantity, quote.price) : sell(symbol, quantity, quote.price);
-
-    if (side === 'BUY' && (takeProfitPrice != null || stopLossPrice != null)) {
-      createBracket(symbol, quantity, takeProfitPrice, stopLossPrice);
-    }
-
-    res.json(order);
-  } catch (err) {
-    if (err instanceof TradingError) return res.status(400).json({ error: err.message });
-    next(err);
-  }
-});
-
-router.get('/brackets', (req, res) => {
-  const symbol = req.query.symbol ? String(req.query.symbol) : undefined;
-  res.json(getActiveBrackets(symbol));
-});
-
-router.delete('/brackets/:id', (req, res, next) => {
-  try {
-    cancelBracket(Number(req.params.id));
-    res.json({ ok: true });
-  } catch (err) {
-    if (err instanceof TradingError) return res.status(400).json({ error: err.message });
-    next(err);
-  }
-});
-
 router.get('/alerts', (req, res) => {
   const limit = req.query.limit ? Number(req.query.limit) : 50;
   res.json({ symbols: WATCHED_SYMBOLS, alerts: getRecentAlerts(limit) });
-});
-
-router.post('/account/reset', (_req, res) => {
-  resetAccount();
-  res.json({ ok: true });
 });
 
 router.get('/futures/contracts', (_req, res) => {
