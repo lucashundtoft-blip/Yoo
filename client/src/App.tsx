@@ -10,7 +10,6 @@ import { FuturesHeatmapPage } from './pages/FuturesHeatmapPage';
 import { FuturesDetailPage } from './pages/FuturesDetailPage';
 import { FuturesPortfolioPage } from './pages/FuturesPortfolioPage';
 import { FuturesOrdersPage } from './pages/FuturesOrdersPage';
-import { FuturesReplayPage } from './pages/FuturesReplayPage';
 import { FuturesGuidePage } from './pages/FuturesGuidePage';
 import { AlertsPage } from './pages/AlertsPage';
 
@@ -31,8 +30,6 @@ function App() {
             <Route path="/futures" element={<FuturesHeatmapPage />} />
             <Route path="/futures/:symbol" element={<FuturesDetailPage />} />
             <Route path="/futures-guide" element={<FuturesGuidePage />} />
-            <Route path="/futures-replay" element={<FuturesReplayPage />} />
-            <Route path="/futures-replay/:symbol" element={<FuturesReplayPage />} />
             <Route path="/futures-portfolio" element={<FuturesPortfolioPage />} />
             <Route path="/futures-orders" element={<FuturesOrdersPage />} />
             <Route path="/alerts" element={<AlertsPage />} />

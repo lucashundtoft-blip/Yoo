@@ -2,10 +2,6 @@ import { NavLink } from 'react-router-dom';
 import { SearchBar } from './SearchBar';
 import { WatchlistIcon, PortfolioIcon, OrdersIcon, ReplayIcon, FuturesIcon, AlertsIcon } from './TabIcons';
 
-// Standalone static page (not a client-side route) -- a plain <a> so the
-// browser does a real navigation instead of react-router swallowing it.
-const REPLAY_DESK_HREF = '/replay-desk.html';
-
 const TABS = [
   { to: '/', end: true, label: 'Watchlist', Icon: WatchlistIcon },
   { to: '/portfolio', end: false, label: 'Portfolio', Icon: PortfolioIcon },
@@ -28,7 +24,6 @@ export function NavBar() {
               {tab.label}
             </NavLink>
           ))}
-          <a href={REPLAY_DESK_HREF}>Replay Desk</a>
         </nav>
         <SearchBar />
       </header>
@@ -44,10 +39,6 @@ export function NavBar() {
             )}
           </NavLink>
         ))}
-        <a href={REPLAY_DESK_HREF}>
-          <ReplayIcon active={false} />
-          <span>Desk</span>
-        </a>
       </nav>
     </>
   );
