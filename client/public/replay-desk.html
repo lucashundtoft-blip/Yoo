@@ -106,7 +106,10 @@ h2 { font-size:16px; margin:0 0 6px; }
       <button id="sellBtn" class="big sell" type="button">Sell</button>
     </div>
     <button id="cancelBtn" class="big" type="button" hidden>Cancel</button>
-    <button id="closeBtn" class="big" type="button" hidden>Close position</button>
+    <div class="tbtns" id="posBtns" hidden>
+      <button id="closeBtn" class="big" type="button">Close position</button>
+      <button id="flipBtn" class="big" type="button">Flip position</button>
+    </div>
     <p id="posLine" class="num"></p>
     <p id="msg" aria-live="polite"></p>
     <p id="note" class="num"></p>
@@ -139,7 +142,7 @@ h2 { font-size:16px; margin:0 0 6px; }
       </table>
     </div>
     <p id="emptyLog" class="sub">No trades yet.</p>
-    <p class="rules">Your rules: one contract, a stop on every trade, 30 minutes off after any exit, done after 2 losses in a row, $20 down, or 3 trades. Price moves inside a candle are estimated from its open, high, low and close. Times are Central, like Webull. Drag the chart to move it in any direction, pinch to zoom, double-tap to reset. Swipe anywhere else, including the volume area, to scroll the page.</p>
+    <p class="rules">Your rules: one contract, a stop on every trade. Flip reverses your position instantly, no need to start a new session. Price moves inside a candle are estimated from its open, high, low and close. Times are Central, like Webull. Drag the chart to move it in any direction, pinch to zoom, double-tap to reset. Swipe anywhere else, including the volume area, to scroll the page.</p>
   </section>
 </main>
 
@@ -151,7 +154,7 @@ var CT = 'America/Chicago';
 var ctFmt = new Intl.DateTimeFormat('en-US', { timeZone: CT, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short' });
 var T = 15;                        // price steps inside each candle
 var SPEEDS = [60, 30, 10, 3, 1];   // seconds per candle
-var SLIP = 1, COOL = 30, MAX_LOSS = 2, CAP = 20, MAX_TRADES = 3;
+var SLIP = 1;
 var INTS = [5, 10, 15, 30, 60, 120, 180, 240, 360, 720];
 
 function $(id) { return document.getElementById(id); }
@@ -269,15 +272,11 @@ function newSession() {
 }
 
 function canEnter() {
-  if (S.ended) return { ok: false, why: 'Session ended. Tap New session.' };
+  // Free-running bar replay: no cooldown, loss cap, or trade-count limit --
+  // the only thing that blocks a new entry is already being in a position,
+  // an order already being set up, or having run out of bars to replay.
+  if (S.ended) return { ok: false, why: 'End of data. Tap New session for a fresh run.' };
   if (S.pos) return { ok: false, why: '' };
-  if (S.net <= -CAP) return { ok: false, why: 'Loss cap reached. Done for today.' };
-  if (S.consec >= MAX_LOSS) return { ok: false, why: MAX_LOSS + ' losses in a row. Done for today.' };
-  if (S.entries >= MAX_TRADES) return { ok: false, why: 'Max trades reached. Done for today.' };
-  if (S.lastExit !== null) {
-    var mins = (nowSec() - S.lastExit) / 60;
-    if (mins < COOL) return { ok: false, why: 'Cooldown: wait ' + Math.ceil(COOL - mins) + ' more min.' };
-  }
   return { ok: true, why: '' };
 }
 
@@ -343,6 +342,16 @@ function closeNow() {
   if (!S.pos) return;
   exitPos(roundTick(px() - S.pos.side * SLIP * cur.tick), 'Closed');
   render();
+}
+
+/* One tap to reverse: close the current position at market, then go
+   straight into a new setup on the opposite side -- no "New session"
+   needed to change your mind about direction. */
+function flipPosition() {
+  if (!S.pos) return;
+  var newSide = -S.pos.side;
+  exitPos(roundTick(px() - S.pos.side * SLIP * cur.tick), 'Flipped');
+  startSetup(newSide);
 }
 
 function checkFills() {
@@ -436,7 +445,7 @@ function render() {
   var chk = canEnter();
   $('tbtns').hidden = !!(S.pos || S.setup);
   $('cancelBtn').hidden = !S.setup;
-  $('closeBtn').hidden = !S.pos;
+  $('posBtns').hidden = !S.pos;
   $('buyBtn').disabled = !chk.ok;
   $('sellBtn').disabled = !chk.ok;
   $('playBtn').disabled = S.ended;
@@ -855,6 +864,7 @@ $('buyBtn').addEventListener('click', function () { startSetup(1); });
 $('sellBtn').addEventListener('click', function () { startSetup(-1); });
 $('cancelBtn').addEventListener('click', cancelSetup);
 $('closeBtn').addEventListener('click', closeNow);
+$('flipBtn').addEventListener('click', flipPosition);
 $('playBtn').addEventListener('click', togglePlay);
 $('nextBtn').addEventListener('click', nextCandle);
 $('speedBtn').addEventListener('click', function () {
