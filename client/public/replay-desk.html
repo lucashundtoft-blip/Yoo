@@ -142,7 +142,7 @@ h2 { font-size:16px; margin:0 0 6px; }
       </table>
     </div>
     <p id="emptyLog" class="sub">No trades yet.</p>
-    <p class="rules">Your rules: one contract, a stop on every trade. Flip reverses your position instantly, no need to start a new session. Price moves inside a candle are estimated from its open, high, low and close. Times are Central, like Webull. Drag the chart to move it in any direction, pinch to zoom, double-tap to reset. Swipe anywhere else, including the volume area, to scroll the page.</p>
+    <p class="rules">Your rules: one contract, a stop on every trade. Flip reverses your position instantly, no need to start a new session. Teal/orange horizontal zones mark liquidity-sweep reversal setups (a 3-candle pattern) from confirmed bars only -- solid while unbroken, dotted once price touches the level or 100 bars pass unused. Price moves inside a candle are estimated from its open, high, low and close. Times are Central, like Webull. Drag the chart to move it in any direction, pinch to zoom, double-tap to reset. Swipe anywhere else, including the volume area, to scroll the page.</p>
   </section>
 </main>
 
@@ -167,6 +167,44 @@ function ctParts(sec) {
 }
 
 var cur = null, S = null, timer = null, speedIdx = 1;
+var liqCache = null;
+
+/* Liquidity-sweep reversal zones (ported from the "Liquidity Reversal
+   Patterns" indicator): a 3-candle pattern where the middle candle sweeps
+   liquidity past the oldest candle's low (bullish) or high (bearish) and
+   the newest candle reverses back through the oldest candle's opposite
+   extreme. Only ever scans bars up to `uptoIdx`, the last CONFIRMED
+   (fully closed) bar -- never the bar currently forming -- so this can't
+   see or react to price action that hasn't happened yet in the replay. */
+var LIQ_EXPIRY_BARS = 100;
+
+function computeLiquidityZones(bars, uptoIdx) {
+  var zones = [], k;
+  for (k = 2; k <= uptoIdx; k++) {
+    var c2 = bars[k - 2], c1 = bars[k - 1], c0 = bars[k];
+    // bar = [time, open, high, low, close, volume]
+    var bull = c2[4] < c2[1] && c1[4] < c1[1] && c1[3] < c2[3] && c1[2] <= c2[2] && c0[4] > c0[1] && c0[2] > c2[2];
+    var bear = c2[4] > c2[1] && c1[4] > c1[1] && c1[2] > c2[2] && c1[3] >= c2[3] && c0[4] < c0[1] && c0[3] < c2[3];
+    if (bull) {
+      zones.push({ side: 1, level: Math.min(c2[3], c1[3], c0[3]), boxEdge: Math.max(c2[2], c1[2], c0[2]), startIdx: k, active: true, endIdx: uptoIdx });
+    }
+    if (bear) {
+      zones.push({ side: -1, level: Math.max(c2[2], c1[2], c0[2]), boxEdge: Math.min(c2[3], c1[3], c0[3]), startIdx: k, active: true, endIdx: uptoIdx });
+    }
+  }
+  // Simulate touch/expiry forward from each zone's own next bar onward --
+  // never the zone's own defining bar, so a zone can't invalidate itself
+  // the moment it's created.
+  zones.forEach(function (z) {
+    for (var j = z.startIdx + 1; j <= uptoIdx; j++) {
+      var b = bars[j];
+      var touched = z.side === 1 ? b[3] <= z.level : b[2] >= z.level;
+      var expired = (j - z.startIdx) >= LIQ_EXPIRY_BARS;
+      if (touched || expired) { z.active = false; z.endIdx = j; break; }
+    }
+  });
+  return zones;
+}
 var view = null, drag = null, tapStart = null;
 
 function fpc(p, d) { return p.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }); }
@@ -291,6 +329,7 @@ function loadDataset(sym, tf) {
   cur = { sym: sym, tf: tf, desc: d.desc, pv: d.pv, tick: d.tick, dec: d.dec, fee: d.fee, bars: bars,
           e8: ema(bars, 8), e50: ema(bars, 50), ss: ss,
           labs: new Array(bars.length), paths: new Array(bars.length) };
+  liqCache = null;
   newSession();
 }
 
@@ -657,6 +696,43 @@ function draw() {
   }
   maLine(cur.e50, 50, C.e50);
   maLine(cur.e8, 8, C.e8);
+
+  // liquidity-sweep reversal zones -- only ever computed from confirmed
+  // (fully closed) bars, so the currently-forming bar can't trigger or
+  // invalidate one mid-formation.
+  var confirmedIdx = S.s >= T ? i : i - 1;
+  if (confirmedIdx >= 2) {
+    if (!liqCache || liqCache.sym !== cur.sym || liqCache.tf !== cur.tf || liqCache.uptoIdx !== confirmedIdx) {
+      liqCache = { sym: cur.sym, tf: cur.tf, uptoIdx: confirmedIdx, zones: computeLiquidityZones(bars, confirmedIdx) };
+    }
+    liqCache.zones.forEach(function (z) {
+      var lineEndIdx = Math.min(z.active ? e : z.endIdx, e);
+      if (lineEndIdx < z.startIdx || z.startIdx > e) return; // fully off the right edge
+      var col = z.side === 1 ? C.up : C.down;
+      var zy = Math.round(yOf(z.level)) + 0.5, zEdgeY = yOf(z.boxEdge);
+      g.globalAlpha = z.active ? 0.1 : 0.05;
+      g.fillStyle = col;
+      g.fillRect(xOf(z.startIdx), Math.min(zy, zEdgeY), Math.max(1, xOf(lineEndIdx) - xOf(z.startIdx)), Math.abs(zEdgeY - zy));
+      g.globalAlpha = z.active ? 1 : 0.55;
+      g.strokeStyle = col; g.lineWidth = z.active ? 2 : 1;
+      g.setLineDash(z.active ? [] : [4, 3]);
+      g.beginPath(); g.moveTo(xOf(z.startIdx), zy); g.lineTo(xOf(lineEndIdx), zy); g.stroke();
+      g.setLineDash([]);
+      if (z.startIdx >= start) {
+        var mx = xOf(z.startIdx);
+        g.fillStyle = col; g.beginPath();
+        if (z.side === 1) {
+          var my = yOf(bar(z.startIdx)[3]) + 9;
+          g.moveTo(mx, my - 6); g.lineTo(mx - 5, my + 4); g.lineTo(mx + 5, my + 4);
+        } else {
+          var my2 = yOf(bar(z.startIdx)[2]) - 9;
+          g.moveTo(mx, my2 + 6); g.lineTo(mx - 5, my2 - 4); g.lineTo(mx + 5, my2 - 4);
+        }
+        g.closePath(); g.fill();
+      }
+      g.globalAlpha = 1;
+    });
+  }
 
   // last price line
   var lp = fb.c, ly = Math.round(yOf(lp)) + 0.5, upNow = fb.c >= fb.o;
