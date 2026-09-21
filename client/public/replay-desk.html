@@ -115,7 +115,13 @@ h2 { font-size:16px; margin:0 0 6px; }
     <p id="note" class="num"></p>
   </section>
 
-  <div class="tfrow"><select id="tf" class="tf" aria-label="Timeframe"></select></div>
+  <div class="tfrow">
+    <select id="tf" class="tf" aria-label="Timeframe"></select>
+    <select id="maTypeSel" class="tf" aria-label="200 MA type">
+      <option value="SMA">200 SMA</option>
+      <option value="EMA">200 EMA</option>
+    </select>
+  </div>
   <div class="legend num">
     <span>EMA(8,50)</span>
     <b class="e8" id="lg8"></b>
@@ -175,6 +181,9 @@ function ctParts(sec) {
 var cur = null, S = null, timer = null, speedIdx = 1;
 var liqCache = null;
 var momCache = null;
+var maType = 'SMA';
+function ma200Arr() { return maType === 'EMA' ? cur.ma200Ema : cur.ma200Sma; }
+function ma200Now(i, price) { return maType === 'EMA' ? emaNow(cur.ma200Ema, 200, i, price) : smaNow(cur.bars, 200, i, price); }
 
 /* 200 MA Momentum Matrix (ported from the same-named Pine Script
    indicator): tints the chart by where confirmed price sits relative to
@@ -414,7 +423,7 @@ function loadDataset(sym, tf) {
   else bars = aggregate(d.b5, tf / 5);
   var ss = buildSessions(bars);
   cur = { sym: sym, tf: tf, desc: d.desc, pv: d.pv, tick: d.tick, dec: d.dec, fee: d.fee, bars: bars,
-          e8: ema(bars, 8), e50: ema(bars, 50), sma200: sma(bars, 200), rsi14: computeRSIArray(bars, 14), ss: ss,
+          e8: ema(bars, 8), e50: ema(bars, 50), ma200Sma: sma(bars, 200), ma200Ema: ema(bars, 200), rsi14: computeRSIArray(bars, 14), ss: ss,
           labs: new Array(bars.length), paths: new Array(bars.length) };
   liqCache = null;
   momCache = null;
@@ -603,8 +612,8 @@ function render() {
   else { rel.textContent = 'Price on EMA 8'; rel.className = 'flat'; }
 
   var confirmedForLegend = S.s >= T ? i : i - 1;
-  var momState = confirmedForLegend >= 200 ? computeMomentumState(cur.bars, cur.sma200, cur.rsi14, confirmedForLegend) : null;
-  $('lgSma').textContent = 'MA:' + (momState && momState.ma !== null ? fp(momState.ma) : '--');
+  var momState = confirmedForLegend >= 200 ? computeMomentumState(cur.bars, ma200Arr(), cur.rsi14, confirmedForLegend) : null;
+  $('lgSma').textContent = maType + ':' + (momState && momState.ma !== null ? fp(momState.ma) : '--');
   $('lgRsi').textContent = 'RSI:' + (momState && momState.rsi !== null ? momState.rsi.toFixed(1) : '--');
   var lgMom = $('lgMom');
   lgMom.textContent = momState ? momState.status : 'Neutral';
@@ -742,9 +751,9 @@ function draw() {
   // behind everything else in the main price pane.
   var confirmedIdxForMom = S.s >= T ? i : i - 1;
   if (confirmedIdxForMom >= 200) {
-    if (!momCache || momCache.sym !== cur.sym || momCache.tf !== cur.tf || momCache.uptoIdx !== confirmedIdxForMom) {
-      momCache = { sym: cur.sym, tf: cur.tf, uptoIdx: confirmedIdxForMom,
-        state: computeMomentumState(bars, cur.sma200, cur.rsi14, confirmedIdxForMom) };
+    if (!momCache || momCache.sym !== cur.sym || momCache.tf !== cur.tf || momCache.maType !== maType || momCache.uptoIdx !== confirmedIdxForMom) {
+      momCache = { sym: cur.sym, tf: cur.tf, maType: maType, uptoIdx: confirmedIdxForMom,
+        state: computeMomentumState(bars, ma200Arr(), cur.rsi14, confirmedIdxForMom) };
     }
     if (momCache.state.bg) {
       g.fillStyle = momCache.state.bg;
@@ -807,12 +816,14 @@ function draw() {
   maLine(cur.e50, 50, C.e50);
   maLine(cur.e8, 8, C.e8);
 
-  // 200 SMA line, purple -- extends live into the forming bar for a
-  // smooth line, independent of the confirmed-bar-only regime/crosses above.
+  // 200 MA line (SMA or EMA, per the toggle), purple -- extends live into
+  // the forming bar for a smooth line, independent of the confirmed-bar-only
+  // regime/crosses above.
+  var ma200 = ma200Arr();
   g.lineJoin = 'round'; g.lineCap = 'round'; g.lineWidth = 2; g.strokeStyle = C.sma200; g.beginPath();
   var smaBegan = false, smaV, smaJ;
   for (smaJ = start; smaJ <= e; smaJ++) {
-    smaV = (smaJ === i) ? smaNow(bars, 200, i, fb.c) : cur.sma200[smaJ];
+    smaV = (smaJ === i) ? ma200Now(i, fb.c) : ma200[smaJ];
     if (smaV === null) continue;
     if (!smaBegan) { g.moveTo(xOf(smaJ), yOf(smaV)); smaBegan = true; } else g.lineTo(xOf(smaJ), yOf(smaV));
   }
@@ -1108,6 +1119,8 @@ $('sym').addEventListener('change', function () {
   $('desc').textContent = cur.desc;
 });
 $('tf').addEventListener('change', function () { loadDataset($('sym').value, +this.value); });
+$('maTypeSel').value = maType;
+$('maTypeSel').addEventListener('change', function () { maType = this.value; momCache = null; render(); });
 $('buyBtn').addEventListener('click', function () { startSetup(1); });
 $('sellBtn').addEventListener('click', function () { startSetup(-1); });
 $('cancelBtn').addEventListener('click', cancelSetup);
