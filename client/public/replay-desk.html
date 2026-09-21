@@ -228,15 +228,48 @@ function buildSessions(bars) {
   return { sess: sess, sHigh: sHigh, sLow: sLow, sVol: sVol, prevClose: prevClose };
 }
 
-/* A candle forms in T steps. The path is an estimate: bullish candles visit the low first, bearish the high. */
+/* Real prints (checked live against Webull's tick tape) don't glide in a
+   straight line to the high/low -- they sit at the same price for several
+   trades in a row, jitter a tick or two against the trend, then resume.
+   This walks tick-by-tick with that same idle/jitter/drift mix, forced to
+   land exactly on each real waypoint (open, low-or-high, high-or-low,
+   close) so the bar's actual OHLC is never violated. */
+function tickWalk(from, to, steps, lo, hi) {
+  var out = [], price = from, k, remaining, bias, r, step, dir;
+  for (k = 0; k < steps; k++) {
+    remaining = steps - k;
+    bias = Math.round((to - price) / cur.tick) / remaining; // avg ticks/step still owed
+    r = Math.random();
+    if (Math.abs(bias) >= 1) {
+      // behind schedule -- must move toward the target now
+      dir = bias > 0 ? 1 : -1;
+      step = dir * (r < 0.75 ? 1 : 2);
+    } else if (r < 0.4) {
+      step = 0; // idle print at the same price, like real repeated trades
+    } else if (r < 0.85) {
+      step = (bias >= 0 ? 1 : -1); // drift with the remaining bias
+    } else {
+      step = (bias >= 0 ? -1 : 1); // brief counter-tick jitter
+    }
+    price = roundTick(price + step * cur.tick);
+    if (price > hi) price = hi;
+    if (price < lo) price = lo;
+    out.push(price);
+  }
+  out[out.length - 1] = to; // exact waypoint every time, real data stays authoritative
+  return out;
+}
+
 function pathFor(i) {
   var c = cur.paths[i];
   if (c) return c;
   var b = cur.bars[i], o = b[1], h = b[2], l = b[3], cl = b[4];
   var wp = cl >= o ? [o, l, h, cl] : [o, h, l, cl];
-  var pts = [o], per = Math.floor(T / 3), seg, k;
+  var per = Math.floor(T / 3), lens = [per, per, T - 2 * per];
+  var pts = [o], seg, segPts, k;
   for (seg = 0; seg < 3; seg++) {
-    for (k = 1; k <= per; k++) pts.push(roundTick(wp[seg] + (wp[seg + 1] - wp[seg]) * k / per));
+    segPts = tickWalk(wp[seg], wp[seg + 1], lens[seg], l, h);
+    for (k = 0; k < segPts.length; k++) pts.push(segPts[k]);
   }
   cur.paths[i] = pts;
   return pts;
