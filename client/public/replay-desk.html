@@ -9,7 +9,7 @@
 :root {
   color-scheme: light;
   --bg:#FFFFFF; --grey:#F5F6FA; --text:#20222A; --muted:#8B8F9A; --line:#E9EBF0;
-  --up:#14B089; --down:#EE9635; --ema8:#2196F3; --ema50:#1ED5B7;
+  --up:#14B089; --down:#EE9635; --ema8:#2196F3; --ema50:#1ED5B7; --sma200:#9C27B0;
   --profile:#C9E5FC; --blue:#256AF4; --volma:#FF6F00; --cyan:#7ED6F0; --pillborder:#D6D9E0;
 }
 * { box-sizing: border-box; }
@@ -57,7 +57,7 @@ select { font:inherit; color:var(--text); }
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='white' stroke-width='1.8'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 9px center; }
 .legend { font-size:13.5px; display:flex; flex-wrap:wrap; gap:4px 10px; align-items:center; margin:2px 0 4px; }
 .legend b { font-weight:500; }
-.e8 { color:var(--ema8); } .e50 { color:var(--ema50); }
+.e8 { color:var(--ema8); } .e50 { color:var(--ema50); } .sma200 { color:var(--sma200); }
 #chartWrap { position:relative; width:100%; height:min(62vh, 480px); min-height:380px; background:var(--bg); }
 #chart { display:block; pointer-events:none; }
 #touch { position:absolute; left:0; top:0; width:100%; height:300px; touch-action:none; cursor:grab; }
@@ -122,6 +122,12 @@ h2 { font-size:16px; margin:0 0 6px; }
     <b class="e50" id="lg50"></b>
     <b id="rel"></b>
   </div>
+  <div class="legend num">
+    <span>200 MA</span>
+    <b class="sma200" id="lgSma"></b>
+    <b id="lgRsi"></b>
+    <b id="lgMom"></b>
+  </div>
 
   <div id="chartWrap"><canvas id="chart" aria-label="Candlestick chart with EMA 8 and EMA 50 and volume" role="img"></canvas><div id="touch"></div></div>
 
@@ -168,6 +174,44 @@ function ctParts(sec) {
 
 var cur = null, S = null, timer = null, speedIdx = 1;
 var liqCache = null;
+var momCache = null;
+
+/* 200 MA Momentum Matrix (ported from the same-named Pine Script
+   indicator): tints the chart by where confirmed price sits relative to
+   the 200 SMA and whether RSI(14) confirms or contradicts that side,
+   plus a triangle wherever a confirmed close crosses the 200 SMA.
+   Regime and cross events are computed from confirmed bars only, same
+   no-lookahead rule as the liquidity zones -- only the plotted MA line
+   itself extends live into the forming bar, for a smooth line. */
+var RSI_OVERBOUGHT = 70, RSI_OVERSOLD = 30;
+var MOM_COLORS = { green: '76,175,80', aqua: '0,188,212', red: '244,67,54', orange: '255,152,0' };
+
+function computeMomentumState(bars, smaArr, rsiArr, uptoIdx) {
+  var ma = smaArr[uptoIdx], rsi = rsiArr[uptoIdx];
+  var bg = null, status = 'Neutral';
+  if (ma !== null && rsi !== null) {
+    var close = bars[uptoIdx][4];
+    if (close > ma) {
+      if (rsi >= RSI_OVERBOUGHT) { status = 'Strong Bullish (Overbought)'; bg = 'rgba(' + MOM_COLORS.green + ',0.15)'; }
+      else if (rsi <= RSI_OVERSOLD) { status = 'Bullish Trend / Oversold Reversion'; bg = 'rgba(' + MOM_COLORS.aqua + ',0.15)'; }
+      else { status = 'Bullish Baseline'; bg = 'rgba(' + MOM_COLORS.green + ',0.07)'; }
+    } else if (close < ma) {
+      if (rsi <= RSI_OVERSOLD) { status = 'Strong Bearish (Oversold)'; bg = 'rgba(' + MOM_COLORS.red + ',0.15)'; }
+      else if (rsi >= RSI_OVERBOUGHT) { status = 'Bearish Trend / Overbought Reversion'; bg = 'rgba(' + MOM_COLORS.orange + ',0.15)'; }
+      else { status = 'Bearish Baseline'; bg = 'rgba(' + MOM_COLORS.red + ',0.07)'; }
+    }
+  }
+  // Cross events: every confirmed bar where close crossed the 200 SMA.
+  var crosses = [], k;
+  for (k = 1; k <= uptoIdx; k++) {
+    var prevMa = smaArr[k - 1], curMa = smaArr[k];
+    if (prevMa === null || curMa === null) continue;
+    var prevClose = bars[k - 1][4], curClose = bars[k][4];
+    if (prevClose <= prevMa && curClose > curMa) crosses.push({ idx: k, dir: 1 });
+    else if (prevClose >= prevMa && curClose < curMa) crosses.push({ idx: k, dir: -1 });
+  }
+  return { ma: ma, rsi: rsi, bg: bg, status: status, crosses: crosses };
+}
 
 /* Liquidity-sweep reversal zones (ported from the "Liquidity Reversal
    Patterns" indicator): a 3-candle pattern where the middle candle sweeps
@@ -227,6 +271,49 @@ function emaNow(arr, n, i, price) {
   if (i < 1 || arr[i - 1] === null) return null;
   var k = 2 / (n + 1);
   return price * k + arr[i - 1] * (1 - k);
+}
+
+// True fixed-window SMA (na until `n` bars exist), for the 200 MA
+// momentum regime -- unlike computeSMA elsewhere this doesn't converge
+// early from a partial window, matching Pine's ta.sma().
+function sma(bars, n) {
+  var out = new Array(bars.length), sum = 0, i;
+  for (i = 0; i < bars.length; i++) {
+    sum += bars[i][4];
+    if (i >= n) sum -= bars[i - n][4];
+    out[i] = i >= n - 1 ? sum / n : null;
+  }
+  return out;
+}
+// Live value of that same SMA including the forming bar's current price,
+// for smooth intrabar plotting of the line itself (the regime/background
+// below stays gated to confirmed bars only, same as the liquidity zones).
+function smaNow(bars, n, i, price) {
+  if (i < n - 1) return null;
+  var sum = price, k;
+  for (k = 1; k < n; k++) sum += bars[i - k][4];
+  return sum / n;
+}
+
+// Wilder-smoothed RSI, full array (na until `period` bars of change exist).
+function computeRSIArray(bars, period) {
+  var n = bars.length, out = new Array(n).fill(null);
+  if (n < period + 1) return out;
+  var i, gainSum = 0, lossSum = 0, diff, gain, loss, avgGain, avgLoss;
+  for (i = 1; i <= period; i++) {
+    diff = bars[i][4] - bars[i - 1][4];
+    if (diff >= 0) gainSum += diff; else lossSum -= diff;
+  }
+  avgGain = gainSum / period; avgLoss = lossSum / period;
+  out[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  for (i = period + 1; i < n; i++) {
+    diff = bars[i][4] - bars[i - 1][4];
+    gain = diff > 0 ? diff : 0; loss = diff < 0 ? -diff : 0;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+    out[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  }
+  return out;
 }
 
 function aggregate(bars, k) {
@@ -327,9 +414,10 @@ function loadDataset(sym, tf) {
   else bars = aggregate(d.b5, tf / 5);
   var ss = buildSessions(bars);
   cur = { sym: sym, tf: tf, desc: d.desc, pv: d.pv, tick: d.tick, dec: d.dec, fee: d.fee, bars: bars,
-          e8: ema(bars, 8), e50: ema(bars, 50), ss: ss,
+          e8: ema(bars, 8), e50: ema(bars, 50), sma200: sma(bars, 200), rsi14: computeRSIArray(bars, 14), ss: ss,
           labs: new Array(bars.length), paths: new Array(bars.length) };
   liqCache = null;
+  momCache = null;
   newSession();
 }
 
@@ -514,6 +602,14 @@ function render() {
   else if (b.c < e8 - 1e-9) { rel.textContent = 'Price below EMA 8'; rel.className = 'dn'; }
   else { rel.textContent = 'Price on EMA 8'; rel.className = 'flat'; }
 
+  var confirmedForLegend = S.s >= T ? i : i - 1;
+  var momState = confirmedForLegend >= 200 ? computeMomentumState(cur.bars, cur.sma200, cur.rsi14, confirmedForLegend) : null;
+  $('lgSma').textContent = 'MA:' + (momState && momState.ma !== null ? fp(momState.ma) : '--');
+  $('lgRsi').textContent = 'RSI:' + (momState && momState.rsi !== null ? momState.rsi.toFixed(1) : '--');
+  var lgMom = $('lgMom');
+  lgMom.textContent = momState ? momState.status : 'Neutral';
+  lgMom.className = momState && momState.status.indexOf('Bullish') !== -1 ? 'up' : momState && momState.status.indexOf('Bearish') !== -1 ? 'dn' : 'flat';
+
   var chk = canEnter();
   $('tbtns').hidden = !!(S.pos || S.setup);
   $('cancelBtn').hidden = !S.setup;
@@ -567,7 +663,7 @@ function render() {
 function colors() {
   var s = getComputedStyle(document.documentElement);
   function v(n) { return s.getPropertyValue(n).trim(); }
-  return { up: v('--up'), down: v('--down'), e8: v('--ema8'), e50: v('--ema50'), profile: v('--profile'), volma: v('--volma'),
+  return { up: v('--up'), down: v('--down'), e8: v('--ema8'), e50: v('--ema50'), sma200: v('--sma200'), profile: v('--profile'), volma: v('--volma'),
            cyan: v('--cyan'), text: v('--text'), muted: v('--muted'), bg: v('--bg'), pill: v('--pillborder'), line: v('--line') };
 }
 
@@ -642,6 +738,20 @@ function draw() {
   function xOf(idx) { return xL + (idx - start) * step + step / 2; }
   view = { lo: lo, hi: hi, top: mainTop, bot: mainBot, plotH: plotH, yOf: yOf, br: br, step: step, ppx: (hi - lo) / plotH };
 
+  // 200 MA momentum regime background tint -- confirmed bars only, painted
+  // behind everything else in the main price pane.
+  var confirmedIdxForMom = S.s >= T ? i : i - 1;
+  if (confirmedIdxForMom >= 200) {
+    if (!momCache || momCache.sym !== cur.sym || momCache.tf !== cur.tf || momCache.uptoIdx !== confirmedIdxForMom) {
+      momCache = { sym: cur.sym, tf: cur.tf, uptoIdx: confirmedIdxForMom,
+        state: computeMomentumState(bars, cur.sma200, cur.rsi14, confirmedIdxForMom) };
+    }
+    if (momCache.state.bg) {
+      g.fillStyle = momCache.state.bg;
+      g.fillRect(xL, mainTop, plotW, plotH);
+    }
+  }
+
   // volume at price, light blue, anchored left
   var NB = 34, prof = [], b2;
   for (b2 = 0; b2 < NB; b2++) prof.push(0);
@@ -696,6 +806,35 @@ function draw() {
   }
   maLine(cur.e50, 50, C.e50);
   maLine(cur.e8, 8, C.e8);
+
+  // 200 SMA line, purple -- extends live into the forming bar for a
+  // smooth line, independent of the confirmed-bar-only regime/crosses above.
+  g.lineJoin = 'round'; g.lineCap = 'round'; g.lineWidth = 2; g.strokeStyle = C.sma200; g.beginPath();
+  var smaBegan = false, smaV, smaJ;
+  for (smaJ = start; smaJ <= e; smaJ++) {
+    smaV = (smaJ === i) ? smaNow(bars, 200, i, fb.c) : cur.sma200[smaJ];
+    if (smaV === null) continue;
+    if (!smaBegan) { g.moveTo(xOf(smaJ), yOf(smaV)); smaBegan = true; } else g.lineTo(xOf(smaJ), yOf(smaV));
+  }
+  g.stroke();
+
+  // 200 MA crossover markers -- confirmed-bar cross events only.
+  if (confirmedIdxForMom >= 200) {
+    momCache.state.crosses.forEach(function (cr) {
+      if (cr.idx < start || cr.idx > e) return;
+      var cx2 = xOf(cr.idx);
+      g.fillStyle = cr.dir === 1 ? C.up : C.down;
+      g.beginPath();
+      if (cr.dir === 1) {
+        var cy = yOf(bar(cr.idx)[3]) + 9;
+        g.moveTo(cx2, cy - 6); g.lineTo(cx2 - 5, cy + 4); g.lineTo(cx2 + 5, cy + 4);
+      } else {
+        var cy2 = yOf(bar(cr.idx)[2]) - 9;
+        g.moveTo(cx2, cy2 + 6); g.lineTo(cx2 - 5, cy2 - 4); g.lineTo(cx2 + 5, cy2 - 4);
+      }
+      g.closePath(); g.fill();
+    });
+  }
 
   // liquidity-sweep reversal zones -- only ever computed from confirmed
   // (fully closed) bars, so the currently-forming bar can't trigger or
