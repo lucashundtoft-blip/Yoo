@@ -9,7 +9,7 @@
 :root {
   color-scheme: light;
   --bg:#FFFFFF; --grey:#F5F6FA; --text:#20222A; --muted:#8B8F9A; --line:#E9EBF0;
-  --up:#14B089; --down:#EE9635; --ema8:#2196F3; --ema50:#1ED5B7; --sma200:#9C27B0;
+  --up:#14B089; --down:#EE9635; --ma20:#2196F3; --ma400:#8D6E63; --sma200:#9C27B0;
   --profile:#C9E5FC; --blue:#256AF4; --volma:#FF6F00; --cyan:#7ED6F0; --pillborder:#D6D9E0;
 }
 * { box-sizing: border-box; }
@@ -57,7 +57,7 @@ select { font:inherit; color:var(--text); }
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='white' stroke-width='1.8'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 9px center; }
 .legend { font-size:13.5px; display:flex; flex-wrap:wrap; gap:4px 10px; align-items:center; margin:2px 0 4px; }
 .legend b { font-weight:500; }
-.e8 { color:var(--ema8); } .e50 { color:var(--ema50); } .sma200 { color:var(--sma200); }
+.ma20 { color:var(--ma20); } .ma400 { color:var(--ma400); } .sma200 { color:var(--sma200); }
 #chartWrap { position:relative; width:100%; height:min(62vh, 480px); min-height:380px; background:var(--bg); }
 #chart { display:block; pointer-events:none; }
 #touch { position:absolute; left:0; top:0; width:100%; height:300px; touch-action:none; cursor:grab; }
@@ -117,15 +117,15 @@ h2 { font-size:16px; margin:0 0 6px; }
 
   <div class="tfrow">
     <select id="tf" class="tf" aria-label="Timeframe"></select>
-    <select id="maTypeSel" class="tf" aria-label="200 MA type">
-      <option value="SMA">200 SMA</option>
-      <option value="EMA">200 EMA</option>
+    <select id="maTypeSel" class="tf" aria-label="MA type">
+      <option value="SMA">SMA</option>
+      <option value="EMA">EMA</option>
     </select>
   </div>
   <div class="legend num">
-    <span>EMA(8,50)</span>
-    <b class="e8" id="lg8"></b>
-    <b class="e50" id="lg50"></b>
+    <span>MA(20,400)</span>
+    <b class="ma20" id="lg20"></b>
+    <b class="ma400" id="lg400"></b>
     <b id="rel"></b>
   </div>
   <div class="legend num">
@@ -135,7 +135,7 @@ h2 { font-size:16px; margin:0 0 6px; }
     <b id="lgMom"></b>
   </div>
 
-  <div id="chartWrap"><canvas id="chart" aria-label="Candlestick chart with EMA 8 and EMA 50 and volume" role="img"></canvas><div id="touch"></div></div>
+  <div id="chartWrap"><canvas id="chart" aria-label="Candlestick chart with MA 20, MA 200, MA 400 and volume" role="img"></canvas><div id="touch"></div></div>
 
   <div class="ctrl">
     <button id="playBtn" type="button">Play</button>
@@ -182,8 +182,12 @@ var cur = null, S = null, timer = null, speedIdx = 1;
 var liqCache = null;
 var momCache = null;
 var maType = 'SMA';
+function ma20Arr() { return maType === 'EMA' ? cur.ma20Ema : cur.ma20Sma; }
+function ma20Now(i, price) { return maType === 'EMA' ? emaNow(cur.ma20Ema, 20, i, price) : smaNow(cur.bars, 20, i, price); }
 function ma200Arr() { return maType === 'EMA' ? cur.ma200Ema : cur.ma200Sma; }
 function ma200Now(i, price) { return maType === 'EMA' ? emaNow(cur.ma200Ema, 200, i, price) : smaNow(cur.bars, 200, i, price); }
+function ma400Arr() { return maType === 'EMA' ? cur.ma400Ema : cur.ma400Sma; }
+function ma400Now(i, price) { return maType === 'EMA' ? emaNow(cur.ma400Ema, 400, i, price) : smaNow(cur.bars, 400, i, price); }
 
 /* 200 MA Momentum Matrix (ported from the same-named Pine Script
    indicator): tints the chart by where confirmed price sits relative to
@@ -423,7 +427,8 @@ function loadDataset(sym, tf) {
   else bars = aggregate(d.b5, tf / 5);
   var ss = buildSessions(bars);
   cur = { sym: sym, tf: tf, desc: d.desc, pv: d.pv, tick: d.tick, dec: d.dec, fee: d.fee, bars: bars,
-          e8: ema(bars, 8), e50: ema(bars, 50), ma200Sma: sma(bars, 200), ma200Ema: ema(bars, 200), rsi14: computeRSIArray(bars, 14), ss: ss,
+          ma20Sma: sma(bars, 20), ma20Ema: ema(bars, 20), ma200Sma: sma(bars, 200), ma200Ema: ema(bars, 200),
+          ma400Sma: sma(bars, 400), ma400Ema: ema(bars, 400), rsi14: computeRSIArray(bars, 14), ss: ss,
           labs: new Array(bars.length), paths: new Array(bars.length) };
   liqCache = null;
   momCache = null;
@@ -602,14 +607,14 @@ function render() {
   var pp = ctParts(nowSec());
   $('status').textContent = 'Replay ' + pp.hour + ':' + pp.minute + ' ' + pp.month + '/' + pp.day + ' ' + (pp.timeZoneName || 'CT');
 
-  var e8 = emaNow(cur.e8, 8, i, b.c), e50 = emaNow(cur.e50, 50, i, b.c);
-  $('lg8').textContent = 'EMA8:' + (e8 === null ? '--' : fp(e8));
-  $('lg50').textContent = 'EMA50:' + (e50 === null ? '--' : fp(e50));
+  var ma20v = ma20Now(i, b.c), ma400v = ma400Now(i, b.c);
+  $('lg20').textContent = 'MA20:' + (ma20v === null ? '--' : fp(ma20v));
+  $('lg400').textContent = 'MA400:' + (ma400v === null ? '--' : fp(ma400v));
   var rel = $('rel');
-  if (e8 === null) { rel.textContent = ''; }
-  else if (b.c > e8 + 1e-9) { rel.textContent = 'Price above EMA 8'; rel.className = 'up'; }
-  else if (b.c < e8 - 1e-9) { rel.textContent = 'Price below EMA 8'; rel.className = 'dn'; }
-  else { rel.textContent = 'Price on EMA 8'; rel.className = 'flat'; }
+  if (ma20v === null) { rel.textContent = ''; }
+  else if (b.c > ma20v + 1e-9) { rel.textContent = 'Price above MA 20'; rel.className = 'up'; }
+  else if (b.c < ma20v - 1e-9) { rel.textContent = 'Price below MA 20'; rel.className = 'dn'; }
+  else { rel.textContent = 'Price on MA 20'; rel.className = 'flat'; }
 
   var confirmedForLegend = S.s >= T ? i : i - 1;
   var momState = confirmedForLegend >= 200 ? computeMomentumState(cur.bars, ma200Arr(), cur.rsi14, confirmedForLegend) : null;
@@ -672,7 +677,7 @@ function render() {
 function colors() {
   var s = getComputedStyle(document.documentElement);
   function v(n) { return s.getPropertyValue(n).trim(); }
-  return { up: v('--up'), down: v('--down'), e8: v('--ema8'), e50: v('--ema50'), sma200: v('--sma200'), profile: v('--profile'), volma: v('--volma'),
+  return { up: v('--up'), down: v('--down'), ma20: v('--ma20'), ma400: v('--ma400'), sma200: v('--sma200'), profile: v('--profile'), volma: v('--volma'),
            cyan: v('--cyan'), text: v('--text'), muted: v('--muted'), bg: v('--bg'), pill: v('--pillborder'), line: v('--line') };
 }
 
@@ -802,32 +807,20 @@ function draw() {
     g.fillRect(cx - Math.floor(bw / 2), Math.min(yo, yc), bw, Math.max(1, Math.abs(yc - yo)));
   }
 
-  // EMA lines, bold, over the candles like Webull
-  function maLine(arr, n, color) {
-    g.lineJoin = 'round'; g.lineCap = 'round'; g.lineWidth = 4; g.strokeStyle = color; g.beginPath();
+  // MA lines (SMA or EMA per the toggle), bold, over the candles like Webull
+  function maLine(arr, nowFn, color, width) {
+    g.lineJoin = 'round'; g.lineCap = 'round'; g.lineWidth = width; g.strokeStyle = color; g.beginPath();
     var began = false, v, j;
     for (j = start; j <= e; j++) {
-      v = (j === i) ? emaNow(arr, n, i, fb.c) : arr[j];
+      v = (j === i) ? nowFn(i, fb.c) : arr[j];
       if (v === null) continue;
       if (!began) { g.moveTo(xOf(j), yOf(v)); began = true; } else g.lineTo(xOf(j), yOf(v));
     }
     g.stroke();
   }
-  maLine(cur.e50, 50, C.e50);
-  maLine(cur.e8, 8, C.e8);
-
-  // 200 MA line (SMA or EMA, per the toggle), purple -- extends live into
-  // the forming bar for a smooth line, independent of the confirmed-bar-only
-  // regime/crosses above.
-  var ma200 = ma200Arr();
-  g.lineJoin = 'round'; g.lineCap = 'round'; g.lineWidth = 2; g.strokeStyle = C.sma200; g.beginPath();
-  var smaBegan = false, smaV, smaJ;
-  for (smaJ = start; smaJ <= e; smaJ++) {
-    smaV = (smaJ === i) ? ma200Now(i, fb.c) : ma200[smaJ];
-    if (smaV === null) continue;
-    if (!smaBegan) { g.moveTo(xOf(smaJ), yOf(smaV)); smaBegan = true; } else g.lineTo(xOf(smaJ), yOf(smaV));
-  }
-  g.stroke();
+  maLine(ma400Arr(), ma400Now, C.ma400, 3);
+  maLine(ma20Arr(), ma20Now, C.ma20, 4);
+  maLine(ma200Arr(), ma200Now, C.sma200, 2);
 
   // 200 MA crossover markers -- confirmed-bar cross events only.
   if (confirmedIdxForMom >= 200) {
