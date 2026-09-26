@@ -417,12 +417,14 @@ function tickWalk(from, to, steps, lo, hi) {
     bias = Math.round((to - price) / cur.tick) / remaining; // avg ticks/step still owed
     need = Math.abs(bias);
     r = Math.random();
-    if (need >= 1) {
-      // behind schedule -- a real fast tape catches up with bigger clips,
-      // not just steady 1-tick steps
+    if (remaining <= 2 && need >= 1) {
+      // actually out of room -- a real fast tape catches up with bigger
+      // clips in the final prints of the move, not a steady march the
+      // whole way there (that steady march is what was making this look
+      // too smooth/mechanical instead of erratic like the real tape)
       dir = bias > 0 ? 1 : -1;
       mag = Math.max(Math.round(need), stepMagnitude());
-      step = dir * Math.min(mag, 6);
+      step = dir * Math.min(mag, 8);
     } else if (r < 0.34) {
       step = 0; // idle print at the same price -- ~a third of real prints don't move it
     } else {
