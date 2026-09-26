@@ -377,17 +377,37 @@ function buildSessions(bars) {
    This walks tick-by-tick with that same idle/jitter/drift mix, forced to
    land exactly on each real waypoint (open, low-or-high, high-or-low,
    close) so the bar's actual OHLC is never violated. */
+/* How busy the tape is right now, relative to this dataset's average bar
+   volume. Real MNQ volume swings hard by session -- pulling 30-min bars
+   across a couple of days showed RTH (roughly 13:00-20:00 UTC) running
+   5-10x the volume of overnight Globex hours, with wider ranges to match.
+   That session pattern already lives inside each bar's own volume, so
+   reading it off the real bar (no separate UTC-hour table to maintain)
+   drives both book depth and print size below. */
+function volFactor() {
+  var b = (cur && S) ? cur.bars[S.i] : null;
+  var v = b ? b[5] : 1;
+  return Math.max(0.25, Math.min(4, v / Math.max(1, (cur && cur.avgVol) || 1)));
+}
+
 /* Tick-print size, sampled from real MNQZ6 tick-by-tick trades pulled
    from Webull (1200 prints): ~60% of moves are 1 tick, 25% are 2, 12%
-   are 3, then a thin tail out past 4-6 ticks on the rare fast print. */
+   are 3, then a thin tail out past 4-6 ticks on the rare fast print.
+   A busier-than-average bar (higher volFactor) occasionally bumps the
+   print a tick bigger; a quiet overnight bar occasionally trims it back
+   toward the single-tick baseline. */
 function stepMagnitude() {
-  var r = Math.random();
-  if (r < 0.601) return 1;
-  if (r < 0.848) return 2;
-  if (r < 0.965) return 3;
-  if (r < 0.988) return 4;
-  if (r < 0.997) return 5;
-  return 6;
+  var r = Math.random(), m;
+  if (r < 0.601) m = 1;
+  else if (r < 0.848) m = 2;
+  else if (r < 0.965) m = 3;
+  else if (r < 0.988) m = 4;
+  else if (r < 0.997) m = 5;
+  else m = 6;
+  var vf = volFactor();
+  if (vf > 1 && Math.random() < Math.min(0.5, (vf - 1) * 0.3)) m += 1;
+  else if (vf < 1 && m > 1 && Math.random() < Math.min(0.6, (1 - vf) * 0.5)) m -= 1;
+  return m;
 }
 
 function tickWalk(from, to, steps, lo, hi) {
@@ -454,12 +474,17 @@ function nowSec() { return cur.bars[S.i][0] + cur.tf * 60 * S.s / T; }
    slippage instead of one flat tick every time. */
 function buildBook(mid, fbar) {
   var rangeTicks = Math.max(1, Math.round((fbar.h - fbar.l) / cur.tick));
-  var thin = Math.min(1, rangeTicks / 12);
+  var vf = volFactor();
+  // Range alone would call a big fast bar "thin" -- but real high-volume
+  // bars (the RTH session, or any busy print) actually refill the book
+  // faster than a quiet one of the same range, so volume works against
+  // the range-driven thinness rather than adding to it.
+  var thin = Math.min(1, Math.max(0, (rangeTicks / 12) / vf));
   var bids = [], asks = [], k, emptyChance, bq, aq;
   for (k = 1; k <= 5; k++) {
     emptyChance = Math.max(0, thin - (k - 1) * 0.25);
-    bq = Math.random() < emptyChance ? 0 : Math.max(1, Math.round(3 + Math.random() * 6 * (1 - thin * 0.5)));
-    aq = Math.random() < emptyChance ? 0 : Math.max(1, Math.round(3 + Math.random() * 6 * (1 - thin * 0.5)));
+    bq = Math.random() < emptyChance ? 0 : Math.max(1, Math.round(vf * (3 + Math.random() * 6 * (1 - thin * 0.5))));
+    aq = Math.random() < emptyChance ? 0 : Math.max(1, Math.round(vf * (3 + Math.random() * 6 * (1 - thin * 0.5))));
     bids.push({ price: roundTick(mid - k * cur.tick), qty: bq });
     asks.push({ price: roundTick(mid + k * cur.tick), qty: aq });
   }
@@ -487,10 +512,11 @@ function loadDataset(sym, tf) {
   else if (tf === 5) bars = d.b5;
   else bars = aggregate(d.b5, tf / 5);
   var ss = buildSessions(bars);
+  var avgVol = bars.reduce(function (s, b) { return s + b[5]; }, 0) / bars.length;
   cur = { sym: sym, tf: tf, desc: d.desc, pv: d.pv, tick: d.tick, dec: d.dec, fee: d.fee, bars: bars,
           ma20Sma: sma(bars, 20), ma20Ema: ema(bars, 20), ma200Sma: sma(bars, 200), ma200Ema: ema(bars, 200),
           ma400Sma: sma(bars, 400), ma400Ema: ema(bars, 400), rsi14: computeRSIArray(bars, 14), ss: ss,
-          labs: new Array(bars.length), paths: new Array(bars.length) };
+          avgVol: avgVol, labs: new Array(bars.length), paths: new Array(bars.length) };
   liqCache = null;
   momCache = null;
   newSession();
